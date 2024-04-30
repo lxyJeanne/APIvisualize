@@ -26,6 +26,17 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
+        action = request.form.get('action', 'login')    # 获取 action 参数
+        # 如果 action 为 delete，则删除用户
+        if action == 'delete':
+            user = User.query.filter_by(username=username, password=password).first()
+            if user:
+                db.session.delete(user)
+                db.session.commit()
+                return "User deleted successfully"
+            else:
+                return "User not found", 404
+
         if not username or not password:
             return "Username and password are required", 400
         if User.query.filter_by(username=username).first():
@@ -51,6 +62,8 @@ def login():
             db.session.delete(new_user)
             db.session.commit()
             return "Failed to communicate with token service", 500
+            #应当确保已经在 db.session.add(new_user) 后执行了 db.session.commit()
+            #因为只有提交后，才能确保数据库中已存在该记录，从而可以被删除。
     else:
         return redirect(url_for('page_login'))
 
