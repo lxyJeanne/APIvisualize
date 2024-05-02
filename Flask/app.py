@@ -1,6 +1,10 @@
+import json
 from flask import Flask, render_template, request, url_for, redirect
 from flask_sqlalchemy import SQLAlchemy
 import requests
+from datetime import datetime, timezone
+import xml.etree.ElementTree as ET
+from sqlalchemy import DateTime
 
 app = Flask(__name__)
 # Ensure the SECRET_KEY is set to a secure, random value when deploying.
@@ -14,8 +18,26 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(80), nullable=False)
-    token = db.Column(db.String(255), nullable=True)  # 新增 token 字段
+    token = db.Column(db.String(255), nullable=True)  
+    # 确保 token_expiry 字段可以存储时区信息
+    token_expiry = db.Column(DateTime(timezone=True), nullable=True)
     print("User table created")
+
+class Event(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    device_serial = db.Column(db.String(120), nullable=False)
+    event_type = db.Column(db.String(120), nullable=False)
+    description = db.Column(db.String(255), nullable=True)
+    trigger_time = db.Column(db.DateTime, nullable=False)
+    channel_name = db.Column(db.String(255), nullable=True)
+    detection_target = db.Column(db.String(255), nullable=True)
+    target_position = db.Column(db.String(255), nullable=True)
+    zone = db.Column(db.String(50), nullable=True)
+    system_name = db.Column(db.String(120), nullable=True)
+    user_name = db.Column(db.String(120), nullable=True)
+    event_code = db.Column(db.Integer, nullable=True)
+    picture_url = db.Column(db.String(255), nullable=True)
+    print("Event table created")
 
 @app.route('/')
 def page_login():
@@ -27,6 +49,7 @@ def login():
         username = request.form['username']
         password = request.form['password']
         action = request.form.get('action', 'login')    # 获取 action 参数
+        
         # 如果 action 为 delete，则删除用户
         if action == 'delete':
             user = User.query.filter_by(username=username, password=password).first()
@@ -36,11 +59,12 @@ def login():
                 return "User deleted successfully"
             else:
                 return "User not found", 404
-
+        # 否则，尝试获取 token
         if not username or not password:
             return "Username and password are required", 400
         if User.query.filter_by(username=username).first():
             return "Username already exists", 400
+        
         new_user = User(username=username, password=password)
         db.session.add(new_user)
         db.session.commit()
@@ -50,6 +74,12 @@ def login():
             json_response = token_response.json()
             if json_response.get('errorCode') == "0" and json_response.get('data'):
                 new_user.token = json_response['data']['accessToken']
+
+                # 处理时间戳
+                timestamp_ms = json_response['data'].get('expireTime')
+                if timestamp_ms:
+                    expire_time = datetime.fromtimestamp(timestamp_ms / 1000.0, timezone.utc)
+                    new_user.token_expiry = expire_time
                 db.session.commit()
                 return "User registered with token"
             else:
@@ -81,6 +111,133 @@ def get_token(username, password):
         "secretKey": password
     }
     return requests.post(url, json=data, headers=headers)
+
+def fetch_data(username, password, token):
+    url = "https://api.hik-partner.com/api/hpcgw/v1/mq/messages"
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json'
+    }
+    data = {
+        "appKey": username,
+        "secretKey": password
+    }
+    response = requests.post(url, json=data, headers=headers)
+    return response
+
+
+@app.route('/fetch-data/<int:user_id>')
+def fetch_user_data(user_id):
+    user = User.query.get(user_id)
+    if not user:
+        return "User not found", 404
+
+    if not is_token_valid(user):
+        # Token 过期或无效，重新获取并更新
+        token_response = get_token(user.username, user.password)
+        if token_response.ok:
+            json_response = token_response.json()
+            if json_response.get('errorCode') == "0" and json_response.get('data'):
+                user.token = json_response['data']['accessToken']
+                expire_time = datetime.fromtimestamp(json_response['data']['expireTime'] / 1000.0, timezone.utc)
+                user.token_expiry = expire_time
+                db.session.commit()
+            else:
+                return f"Failed to renew token: {json_response.get('errorCode')}", 500
+        else:
+            return "Failed to communicate with token service for renewal", 500
+
+    # Token 是有效的，获取数据
+    response = fetch_data(user.username, user.password, user.token)
+    if response.ok:
+        data_list = response.json()['data']['list']
+        parse_and_store_data(data_list, user_id)
+        # return f"Data fetched and stored for user {user_id}"
+        return response.json() #根据 API 返回的数据格式
+    else:
+        return "Failed to fetch data", response.status_code
+
+
+def is_token_valid(user):
+    if user.token_expiry:
+        # 确保 user.token_expiry 是带时区信息的
+        if user.token_expiry.tzinfo is None:
+            # 如果没有时区信息，添加 UTC 时区
+            user.token_expiry = user.token_expiry.replace(tzinfo=timezone.utc)
+        if user.token_expiry > datetime.now(timezone.utc):
+            return True
+    return False
+
+
+def parse_xml(xml_data):
+    root = ET.fromstring(xml_data)
+    data = {
+        'device_serial': root.findtext('.//deviceSerial'),
+        'event_type': root.findtext('.//eventType'),
+        'description': root.findtext('.//eventDescription'),
+        'trigger_time': datetime.fromisoformat(root.findtext('.//triggerTime')),
+        'channel_name': root.findtext('.//channelName'),
+        'detection_target': root.find('.//DetectionRegionEntry').findtext('.//detectionTarget') if root.find('.//DetectionRegionEntry') is not None else '',
+        'target_position': f"{root.findtext('.//X')},{root.findtext('.//Y')},{root.findtext('.//width')},{root.findtext('.//height')}",
+        'zone': '',
+        'system_name': '',
+        'user_name': '',
+        'event_code': None,
+        'picture_url': None
+    }
+    return data
+
+def parse_json(json_data):
+    # Load JSON data into a dictionary
+    event = json.loads(json_data)
+
+    # Access nested 'CIDEvent' dictionary
+    cid_event = json.loads(event.get('alarmData', '{}')).get('CIDEvent', {})
+
+    return {
+        'device_serial': event.get('deviceSerial', ''),
+        'event_type': event.get('eventType', ''),
+        'description': event.get('eventDescription', ''),
+        'trigger_time': datetime.fromisoformat(event.get('triggerTime')),
+        'channel_name': cid_event.get('channelSerial', ''),
+        'detection_target': '',
+        'target_position': '',
+        'zone': cid_event.get('zone', 0),
+        'system_name': cid_event.get('system', 0),
+        'user_name': '',
+        'event_code': cid_event.get('code', None),
+        'picture_url': ''
+    }
+
+def parse_and_store_data(data_list, user_id):
+    for data_item in data_list:
+        format_type = data_item['formatType']
+        alarm_data = data_item['alarmData']
+        if format_type == 'XML':
+            parsed_data = parse_xml(alarm_data)
+        elif format_type == 'JSON':
+            parsed_data = parse_json(alarm_data)
+        else:
+            continue  # 如果数据格式既不是 XML 也不是 JSON，则跳过
+
+        # 检查事件是否已存在
+        if event_exists(parsed_data):
+            continue  # 如果已存在，跳过此条目
+
+        # 将解析后的数据添加到数据库
+        event = Event(**parsed_data)
+        db.session.add(event)
+    db.session.commit()
+
+def event_exists(parsed_data):
+    # 检查相同的 device_serial, trigger_time 和 event_type 是否已存在
+    return Event.query.filter_by(
+        device_serial=parsed_data['device_serial'],
+        event_type=parsed_data['event_type'],
+        trigger_time=parsed_data['trigger_time']
+    ).first() is not None
+
+
 
 if __name__ == '__main__':
     db.create_all()
