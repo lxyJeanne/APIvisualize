@@ -5,6 +5,16 @@ import requests
 from datetime import datetime, timezone
 import xml.etree.ElementTree as ET
 from sqlalchemy import DateTime
+from apscheduler.schedulers.background import BackgroundScheduler
+
+from apscheduler.schedulers.background import BackgroundScheduler
+import logging
+
+def setup_scheduler():
+    logging.basicConfig(level=logging.INFO)
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(func=update_all_events, trigger="interval", minutes=1)
+    scheduler.start()
 
 app = Flask(__name__)
 # Ensure the SECRET_KEY is set to a secure, random value when deploying.
@@ -25,6 +35,7 @@ class User(db.Model):
 
 class Event(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    app_key = db.Column(db.String(120), nullable=True)  # 映射到 User 表的 username 字段
     device_serial = db.Column(db.String(120), nullable=False)
     event_type = db.Column(db.String(120), nullable=False)
     description = db.Column(db.String(255), nullable=True)
@@ -151,7 +162,7 @@ def fetch_user_data(user_id):
     response = fetch_data(user.username, user.password, user.token)
     if response.ok:
         data_list = response.json()['data']['list']
-        parse_and_store_data(data_list, user_id)
+        parse_and_store_data(data_list, user_id, user.username)
         # return f"Data fetched and stored for user {user_id}"
         return response.json() #根据 API 返回的数据格式
     else:
@@ -219,7 +230,7 @@ def parse_json(json_data):
         print("Error decoding JSON")
         return None
 
-def parse_and_store_data(data_list, user_id):
+def parse_and_store_data(data_list, user_id, app_key):
     for data_item in data_list:
         format_type = data_item['formatType']
         alarm_data = data_item['alarmData']
@@ -229,8 +240,9 @@ def parse_and_store_data(data_list, user_id):
             parsed_data = parse_json(alarm_data)
         else:
             continue  # 如果数据格式既不是 XML 也不是 JSON，则跳过
+        parsed_data['app_key'] = app_key  # 将 username 添加到解析的数据中
 
-        # 检查事件是否已存在
+        # 检查事件是否已存在        
         if event_exists(parsed_data):
             continue  # 如果已存在，跳过此条目
 
@@ -247,9 +259,48 @@ def event_exists(parsed_data):
         trigger_time=parsed_data['trigger_time']
     ).first() is not None
 
+@app.route('/update-all-events')
+def update_all_events():
+    with app.app_context():  # 创建一个应用上下文
+        users = User.query.all()
+        results={}
+        for user in users:
+            logging.info(f"Updating events for user: {user.username}")
+            if not is_token_valid(user):
+                token_response = get_token(user.username, user.password)
+                if token_response.ok:
+                    json_response = token_response.json()
+                    if json_response.get('errorCode') == "0" and json_response.get('data'):
+                        user.token = json_response['data']['accessToken']
+                        expire_time = datetime.fromtimestamp(json_response['data']['expireTime'] / 1000.0, timezone.utc)
+                        user.token_expiry = expire_time
+                        db.session.commit()
+                    else:
+                        continue  # 如果无法获取新 token，跳过当前用户
+                else:
+                    continue  # 通信失败，跳过当前用户
+
+            # 获取数据
+            response = fetch_data(user.username, user.password, user.token)
+            if response.ok:
+                data_list = response.json().get('data', {}).get('list', [])
+                parse_and_store_data(data_list, user.id, user.username)  # 传入 app_key
+                results[user.id] = "Events updated"
+            else:
+                continue  # 获取数据失败，跳过当前用户
+                logging.info("failed to fetch data for user {user.username}")
+
+        logging.info(f"Update results: {results}")
+        return "All events updated", 200
 
 
+# 在应用启动时调用定时器设置
 if __name__ == '__main__':
-    db.create_all()
-    app.run(debug=True)
+    with app.app_context():
+        db.create_all() # 创建所有数据库表
+        print("Database tables created")  # 确保数据库表已创建  
+        setup_scheduler()
+        print("Scheduler started")  # 确保定时器已启动
+        app.run(use_reloader=False) # 关闭 reloader 以避免冲突
+
 

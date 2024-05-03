@@ -1,16 +1,16 @@
-from flask import Flask, request, jsonify, render_template, redirect, url_for
+import json
+from flask import Flask, render_template, request, url_for, redirect
 from flask_sqlalchemy import SQLAlchemy
 import requests
 from datetime import datetime, timezone
 import xml.etree.ElementTree as ET
-import json
-
+from sqlalchemy import DateTime
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key'
+# Ensure the SECRET_KEY is set to a secure, random value when deploying.
+app.config['SECRET_KEY'] = 'your-secret-key'  # Replace with a real secret key.
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///user.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
 db = SQLAlchemy(app)
 
 class User(db.Model):
@@ -19,10 +19,13 @@ class User(db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(80), nullable=False)
     token = db.Column(db.String(255), nullable=True)  
-    token_expiry = db.Column(db.DateTime, nullable=True)
+    # 确保 token_expiry 字段可以存储时区信息
+    token_expiry = db.Column(DateTime(timezone=True), nullable=True)
+    print("User table created")
 
 class Event(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    app_key = db.Column(db.String(120), nullable=True)  # 映射到 User 表的 username 字段
     device_serial = db.Column(db.String(120), nullable=False)
     event_type = db.Column(db.String(120), nullable=False)
     description = db.Column(db.String(255), nullable=True)
@@ -35,8 +38,136 @@ class Event(db.Model):
     user_name = db.Column(db.String(120), nullable=True)
     event_code = db.Column(db.Integer, nullable=True)
     picture_url = db.Column(db.String(255), nullable=True)
+    print("Event table created")
+
+@app.route('/')
+def page_login():
+    return render_template('login.html', method=request.method)
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        action = request.form.get('action', 'login')    # 获取 action 参数
+        
+        # 如果 action 为 delete，则删除用户
+        if action == 'delete':
+            user = User.query.filter_by(username=username, password=password).first()
+            if user:
+                db.session.delete(user)
+                db.session.commit()
+                return "User deleted successfully"
+            else:
+                return "User not found", 404
+        # 否则，尝试获取 token
+        if not username or not password:
+            return "Username and password are required", 400
+        if User.query.filter_by(username=username).first():
+            return "Username already exists", 400
+        
+        new_user = User(username=username, password=password)
+        db.session.add(new_user)
+        db.session.commit()
+        # 尝试获取 token
+        token_response = get_token(username, password)
+        if token_response.ok:
+            json_response = token_response.json()
+            if json_response.get('errorCode') == "0" and json_response.get('data'):
+                new_user.token = json_response['data']['accessToken']
+
+                # 处理时间戳
+                timestamp_ms = json_response['data'].get('expireTime')
+                if timestamp_ms:
+                    expire_time = datetime.fromtimestamp(timestamp_ms / 1000.0, timezone.utc)
+                    new_user.token_expiry = expire_time
+                db.session.commit()
+                return "User registered with token"
+            else:
+                # 获取 token 失败，删除添加的用户
+                db.session.delete(new_user)
+                db.session.commit()
+                return f"Failed to get token: {json_response.get('errorCode')}", 500
+        else:
+            # 通信失败，删除添加的用户
+            db.session.delete(new_user)
+            db.session.commit()
+            return "Failed to communicate with token service", 500
+            #应当确保已经在 db.session.add(new_user) 后执行了 db.session.commit()
+            #因为只有提交后，才能确保数据库中已存在该记录，从而可以被删除。
+    else:
+        return redirect(url_for('page_login'))
+
+@app.route('/users')
+def list_users():
+    users = User.query.all()
+    return render_template('users.html', users=users)
 
 
+def get_token(username, password):
+    url = "https://api.hik-partner.com/api/hpcgw/v1/token/get"
+    headers = {'Content-Type': 'application/json'}
+    data = {
+        "appKey": username,
+        "secretKey": password
+    }
+    return requests.post(url, json=data, headers=headers)
+
+def fetch_data(username, password, token):
+    url = "https://api.hik-partner.com/api/hpcgw/v1/mq/messages"
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json'
+    }
+    data = {
+        "appKey": username,
+        "secretKey": password
+    }
+    response = requests.post(url, json=data, headers=headers)
+    return response
+
+
+@app.route('/fetch-data/<int:user_id>')
+def fetch_user_data(user_id):
+    user = User.query.get(user_id)
+    if not user:
+        return "User not found", 404
+
+    if not is_token_valid(user):
+        # Token 过期或无效，重新获取并更新
+        token_response = get_token(user.username, user.password)
+        if token_response.ok:
+            json_response = token_response.json()
+            if json_response.get('errorCode') == "0" and json_response.get('data'):
+                user.token = json_response['data']['accessToken']
+                expire_time = datetime.fromtimestamp(json_response['data']['expireTime'] / 1000.0, timezone.utc)
+                user.token_expiry = expire_time
+                db.session.commit()
+            else:
+                return f"Failed to renew token: {json_response.get('errorCode')}", 500
+        else:
+            return "Failed to communicate with token service for renewal", 500
+
+    # Token 是有效的，获取数据
+    response = fetch_data(user.username, user.password, user.token)
+    if response.ok:
+        data_list = response.json()['data']['list']
+        parse_and_store_data(data_list, user_id, user.username)
+        # return f"Data fetched and stored for user {user_id}"
+        return response.json() #根据 API 返回的数据格式
+    else:
+        return "Failed to fetch data", response.status_code
+
+
+def is_token_valid(user):
+    if user.token_expiry:
+        # 确保 user.token_expiry 是带时区信息的
+        if user.token_expiry.tzinfo is None:
+            # 如果没有时区信息，添加 UTC 时区
+            user.token_expiry = user.token_expiry.replace(tzinfo=timezone.utc)
+        if user.token_expiry > datetime.now(timezone.utc):
+            return True
+    return False
 
 
 def parse_xml(xml_data):
@@ -58,115 +189,69 @@ def parse_xml(xml_data):
     return data
 
 def parse_json(json_data):
-    event = json.loads(json_data)
-    return {
-        'device_serial': event.get('deviceSerial', ''),
-        'event_type': event.get('eventType', ''),
-        'description': event.get('eventDescription', ''),
-        'trigger_time': datetime.fromisoformat(event.get('triggerTime')),
-        'channel_name': '',
-        'detection_target': '',
-        'target_position': '',
-        'zone': event.get('zone', ''),
-        'system_name': event.get('systemName', ''),
-        'user_name': event.get('userName', ''),
-        'event_code': event.get('eventCode', None),
-        'picture_url': event.get('pictureList', [{}])[0].get('url', '') if event.get('pictureList') else ''
-    }
+    try:
+        # 解析 JSON 数据
+        event = json.loads(json_data)
+        print("Complete Event Data:", event)
 
+        # 直接访问 CIDEvent 对象，不需要额外的 json.loads
+        cid_event = event.get('CIDEvent', {})
+        print("CID Event Data:", cid_event)
+    
+        # 尝试从 JSON 中提取 trigger_time 并转换为 datetime 对象
+        trigger_time_str = event.get('triggerTime', '')
+        trigger_time = datetime.fromisoformat(trigger_time_str) if trigger_time_str else None
 
-@app.route('/')
-def page_login():
-    return render_template('login.html', method=request.method)
+        return {
+            'device_serial': event.get('deviceSerial', ''),
+            'event_type': event.get('eventType', ''),
+            'description': cid_event.get('description', ''),
+            'trigger_time': trigger_time,
+            'channel_name': event.get('channelName', ''),
+            'detection_target': cid_event.get('detectionTarget', ''),
+            'target_position': '',
+            'zone': cid_event.get('zone', ''),
+            'system_name': cid_event.get('systemName', ''),
+            'user_name': cid_event.get('userName', ''),
+            'event_code': cid_event.get('code', None),
+            'picture_url': event.get('pictureURL', '')
+        }
+    except json.JSONDecodeError:
+        print("Error decoding JSON")
+        return None
 
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        action = request.form.get('action', 'login')
-        
-        if action == 'delete':
-            user = User.query.filter_by(username=username, password=password).first()
-            if user:
-                db.session.delete(user)
-                db.session.commit()
-                return "User deleted successfully"
-            return "User not found", 404
-        
-        if not username or not password:
-            return "Username and password are required", 400
-        if User.query.filter_by(username=username).first():
-            return "Username already exists", 400
-        
-        new_user = User(username=username, password=password)
-        db.session.add(new_user)
-        db.session.commit()
-        
-        token_response = get_token(username, password)
-        if token_response.ok:
-            json_response = token_response.json()
-            if json_response.get('errorCode') == "0" and json_response.get('data'):
-                new_user.token = json_response['data']['accessToken']
-                timestamp_ms = json_response['data'].get('expireTime')
-                if timestamp_ms:
-                    expire_time = datetime.fromtimestamp(timestamp_ms / 1000.0, timezone.utc)
-                    new_user.token_expiry = expire_time
-                db.session.commit()
-                return "User registered with token"
-            db.session.delete(new_user)
-            db.session.commit()
-            return f"Failed to get token: {json_response.get('errorCode')}", 500
-        db.session.delete(new_user)
-        db.session.commit()
-        return "Failed to communicate with token service", 500
-    return redirect(url_for('page_login'))
-
-@app.route('/users')
-def list_users():
-    users = User.query.all()
-    return render_template('users.html', users=users)
-
-@app.route('/fetch_events')
-def fetch_events():
-    user = User.query.first()
-    if not user:
-        return "No user available", 404
-
-    if not is_token_valid(user):
-        response = get_token(user.username, user.password)
-        if response.ok:
-            data = response.json()
-            user.token = data['data']['accessToken']
-            user.token_expiry = datetime.fromtimestamp(data['data']['expireTime'] / 1000.0, timezone.utc)
-            db.session.commit()
+def parse_and_store_data(data_list, user_id, app_key):
+    for data_item in data_list:
+        format_type = data_item['formatType']
+        alarm_data = data_item['alarmData']
+        if format_type == 'XML':
+            parsed_data = parse_xml(alarm_data)
+        elif format_type == 'JSON':
+            parsed_data = parse_json(alarm_data)
         else:
-            return "Failed to refresh token", response.status_code
+            continue  # 如果数据格式既不是 XML 也不是 JSON，则跳过
+        parsed_data['app_key'] = app_key  # 将 username 添加到解析的数据中
 
-    headers = {'Authorization': f'Bearer {user.token}'}
-    response = requests.get('https://api.hik-partner.com/api/hpcgw/v1/mq/messages', headers=headers)
-    if response.ok:
-        events = response.json()
-        for event in events:
-            event_data = parse_xml(event['alarmData']) if event['formatType'] == 'XML' else parse_json(event['alarmData'])
-            new_event = Event(**event_data)
-            db.session.add(new_event)
-        db.session.commit()
-        return jsonify({'message': 'Events fetched and stored successfully'})
-    else:
-        return jsonify({'error': 'Failed to fetch data'}), response.status_code
+        # 检查事件是否已存在        
+        if event_exists(parsed_data):
+            continue  # 如果已存在，跳过此条目
 
-def get_token(username, password):
-    url = "https://api.hik-partner.com/api/hpcgw/v1/token/get"
-    headers = {'Content-Type': 'application/json'}
-    data = {"appKey": username, "secretKey": password}
-    response = requests.post(url, json=data, headers=headers)
-    return response
+        # 将解析后的数据添加到数据库
+        event = Event(**parsed_data)
+        db.session.add(event)
+    db.session.commit()
 
-def is_token_valid(user):
-    return user.token_expiry and user.token_expiry > datetime.now(timezone.utc)
+def event_exists(parsed_data):
+    # 检查相同的 device_serial, trigger_time 和 event_type 是否已存在
+    return Event.query.filter_by(
+        device_serial=parsed_data['device_serial'],
+        event_type=parsed_data['event_type'],
+        trigger_time=parsed_data['trigger_time']
+    ).first() is not None
+
+
 
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
+    db.create_all()
     app.run(debug=True)
+
