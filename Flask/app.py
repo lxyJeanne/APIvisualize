@@ -188,26 +188,36 @@ def parse_xml(xml_data):
     return data
 
 def parse_json(json_data):
-    # Load JSON data into a dictionary
-    event = json.loads(json_data)
+    try:
+        # 解析 JSON 数据
+        event = json.loads(json_data)
+        print("Complete Event Data:", event)
 
-    # Access nested 'CIDEvent' dictionary
-    cid_event = json.loads(event.get('alarmData', '{}')).get('CIDEvent', {})
+        # 直接访问 CIDEvent 对象，不需要额外的 json.loads
+        cid_event = event.get('CIDEvent', {})
+        print("CID Event Data:", cid_event)
+    
+        # 尝试从 JSON 中提取 trigger_time 并转换为 datetime 对象
+        trigger_time_str = event.get('triggerTime', '')
+        trigger_time = datetime.fromisoformat(trigger_time_str) if trigger_time_str else None
 
-    return {
-        'device_serial': event.get('deviceSerial', ''),
-        'event_type': event.get('eventType', ''),
-        'description': event.get('eventDescription', ''),
-        'trigger_time': datetime.fromisoformat(event.get('triggerTime')),
-        'channel_name': cid_event.get('channelSerial', ''),
-        'detection_target': '',
-        'target_position': '',
-        'zone': cid_event.get('zone', 0),
-        'system_name': cid_event.get('system', 0),
-        'user_name': '',
-        'event_code': cid_event.get('code', None),
-        'picture_url': ''
-    }
+        return {
+            'device_serial': event.get('deviceSerial', ''),
+            'event_type': event.get('eventType', ''),
+            'description': cid_event.get('description', ''),
+            'trigger_time': trigger_time,
+            'channel_name': event.get('channelName', ''),
+            'detection_target': cid_event.get('detectionTarget', ''),
+            'target_position': '',
+            'zone': cid_event.get('zone', ''),
+            'system_name': cid_event.get('systemName', ''),
+            'user_name': cid_event.get('userName', ''),
+            'event_code': cid_event.get('code', None),
+            'picture_url': event.get('pictureURL', '')
+        }
+    except json.JSONDecodeError:
+        print("Error decoding JSON")
+        return None
 
 def parse_and_store_data(data_list, user_id):
     for data_item in data_list:
