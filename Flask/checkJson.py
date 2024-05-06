@@ -15,3 +15,4 @@ cid_event = alarm_data.get('CIDEvent', {})
 print(cid_event)
 description = cid_event.get('description', '')
 print(description)
+
