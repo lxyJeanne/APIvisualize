@@ -29,9 +29,8 @@ const MyLayout = ({ children }) => {
           mode="inline"
           defaultSelectedKeys={['/']}
           onClick={({ key }) => {
-            alert(key)
+            // alert(key)
             navigate(key)
-
           }}
           items={[
             {

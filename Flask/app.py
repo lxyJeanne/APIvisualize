@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import xml.etree.ElementTree as ET
 from sqlalchemy import DateTime
 from apscheduler.schedulers.background import BackgroundScheduler
-
+from flask_cors import CORS
 from apscheduler.schedulers.background import BackgroundScheduler
 import logging
 
@@ -17,6 +17,7 @@ def setup_scheduler():
     scheduler.start()
 
 app = Flask(__name__)
+CORS(app)       # 允许跨域请求
 # Ensure the SECRET_KEY is set to a secure, random value when deploying.
 app.config['SECRET_KEY'] = 'your-secret-key'  # Replace with a real secret key.
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///user.db'
@@ -54,7 +55,61 @@ class Event(db.Model):
 def page_login():
     return render_template('login.html', method=request.method)
 
-@app.route('/login', methods=['GET', 'POST'])
+# @app.route('/login', methods=['GET', 'POST'])
+# def login():
+#     if request.method == 'POST':
+#         username = request.form['username']
+#         password = request.form['password']
+#         action = request.form.get('action', 'login')    # 获取 action 参数
+        
+#         # 如果 action 为 delete，则删除用户
+#         if action == 'delete':
+#             user = User.query.filter_by(username=username, password=password).first()
+#             if user:
+#                 db.session.delete(user)
+#                 db.session.commit()
+#                 return "User deleted successfully"
+#             else:
+#                 return "User not found", 404
+#         # 否则，尝试获取 token
+#         if not username or not password:
+#             return "Username and password are required", 400
+#         if User.query.filter_by(username=username).first():
+#             return "Username already exists", 400
+        
+#         new_user = User(username=username, password=password)
+#         db.session.add(new_user)
+#         db.session.commit()
+#         # 尝试获取 token
+#         token_response = get_token(username, password)
+#         if token_response.ok:
+#             json_response = token_response.json()
+#             if json_response.get('errorCode') == "0" and json_response.get('data'):
+#                 new_user.token = json_response['data']['accessToken']
+
+#                 # 处理时间戳
+#                 timestamp_ms = json_response['data'].get('expireTime')
+#                 if timestamp_ms:
+#                     expire_time = datetime.fromtimestamp(timestamp_ms / 1000.0, timezone.utc)
+#                     new_user.token_expiry = expire_time
+#                 db.session.commit()
+#                 return "User registered with token"
+#             else:
+#                 # 获取 token 失败，删除添加的用户
+#                 db.session.delete(new_user)
+#                 db.session.commit()
+#                 return f"Failed to get token: {json_response.get('errorCode')}", 500
+#         else:
+#             # 通信失败，删除添加的用户
+#             db.session.delete(new_user)
+#             db.session.commit()
+#             return "Failed to communicate with token service", 500
+#             #应当确保已经在 db.session.add(new_user) 后执行了 db.session.commit()
+#             #因为只有提交后，才能确保数据库中已存在该记录，从而可以被删除。
+#     else:
+#         return redirect(url_for('page_login'))
+
+@app.route('/submit', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         username = request.form['username']
