@@ -1,5 +1,5 @@
 import json
-from flask import Flask, render_template, request, url_for, redirect
+from flask import Flask, jsonify, render_template, request, url_for, redirect
 from flask_sqlalchemy import SQLAlchemy
 import requests
 from datetime import datetime, timezone
@@ -55,66 +55,13 @@ class Event(db.Model):
 def page_login():
     return render_template('login.html', method=request.method)
 
-# @app.route('/login', methods=['GET', 'POST'])
-# def login():
-#     if request.method == 'POST':
-#         username = request.form['username']
-#         password = request.form['password']
-#         action = request.form.get('action', 'login')    # 获取 action 参数
-        
-#         # 如果 action 为 delete，则删除用户
-#         if action == 'delete':
-#             user = User.query.filter_by(username=username, password=password).first()
-#             if user:
-#                 db.session.delete(user)
-#                 db.session.commit()
-#                 return "User deleted successfully"
-#             else:
-#                 return "User not found", 404
-#         # 否则，尝试获取 token
-#         if not username or not password:
-#             return "Username and password are required", 400
-#         if User.query.filter_by(username=username).first():
-#             return "Username already exists", 400
-        
-#         new_user = User(username=username, password=password)
-#         db.session.add(new_user)
-#         db.session.commit()
-#         # 尝试获取 token
-#         token_response = get_token(username, password)
-#         if token_response.ok:
-#             json_response = token_response.json()
-#             if json_response.get('errorCode') == "0" and json_response.get('data'):
-#                 new_user.token = json_response['data']['accessToken']
-
-#                 # 处理时间戳
-#                 timestamp_ms = json_response['data'].get('expireTime')
-#                 if timestamp_ms:
-#                     expire_time = datetime.fromtimestamp(timestamp_ms / 1000.0, timezone.utc)
-#                     new_user.token_expiry = expire_time
-#                 db.session.commit()
-#                 return "User registered with token"
-#             else:
-#                 # 获取 token 失败，删除添加的用户
-#                 db.session.delete(new_user)
-#                 db.session.commit()
-#                 return f"Failed to get token: {json_response.get('errorCode')}", 500
-#         else:
-#             # 通信失败，删除添加的用户
-#             db.session.delete(new_user)
-#             db.session.commit()
-#             return "Failed to communicate with token service", 500
-#             #应当确保已经在 db.session.add(new_user) 后执行了 db.session.commit()
-#             #因为只有提交后，才能确保数据库中已存在该记录，从而可以被删除。
-#     else:
-#         return redirect(url_for('page_login'))
-
-@app.route('/submit', methods=['GET', 'POST'])
+@app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        action = request.form.get('action', 'login')    # 获取 action 参数
+        data = request.get_json()  # 获取 JSON 数据
+        username = data['appkey']
+        password = data['secretkey']
+        action = data('action', 'login')    # 获取 action 参数
         
         # 如果 action 为 delete，则删除用户
         if action == 'delete':
@@ -163,10 +110,74 @@ def login():
     else:
         return redirect(url_for('page_login'))
 
-@app.route('/users')
+@app.route('/submit', methods=['POST'])
+def submit():
+    return authenticate_user()
+
+@app.route('/delete', methods=['POST'])
+def delete_user():
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')  # 注意安全性，实际应用中可能需要更安全的验证方式
+
+    user = User.query.filter_by(username=username, password=password).first()
+    if user:
+        db.session.delete(user)
+        db.session.commit()
+        return jsonify({"message": "User deleted successfully"}), 200
+    else:
+        return jsonify({"message": "User not found"}), 404
+
+def authenticate_user():
+    data = request.get_json()  # 获取 JSON 数据
+    username = data.get('appkey')
+    password = data.get('secretkey')
+    
+    # 检查用户名和密码是否提供
+    if not username or not password:
+        return jsonify({'status': 'error', 'message': 'Username and password are required'}), 400
+
+    # 检查用户是否已存在
+    user = User.query.filter_by(username=username).first()
+    if user:
+        return jsonify({'status': 'error', 'message': 'Username already exists'}), 400
+    
+    # 为新用户创建记录
+    new_user = User(username=username, password=password)
+    db.session.add(new_user)
+    db.session.commit()
+
+    # 尝试获取 token
+    token_response = get_token(username, password)
+    if token_response.ok:
+        json_response = token_response.json()
+        if json_response.get('errorCode') == "0" and json_response.get('data'):
+            new_user.token = json_response['data']['accessToken']
+            timestamp_ms = json_response['data'].get('expireTime')
+            if timestamp_ms:
+                new_user.token_expiry = datetime.fromtimestamp(timestamp_ms / 1000.0, timezone.utc)
+            db.session.commit()
+            return jsonify({'status': 'success', 'message': 'User registered with token'}), 200
+        else:
+            db.session.delete(new_user)
+            db.session.commit()
+            return jsonify({'status': 'error', 'message': f"Failed to get token: {json_response.get('errorCode')}"}), 500
+    else:
+        db.session.delete(new_user)
+        db.session.commit()
+        return jsonify({'status': 'error', 'message': 'Failed to communicate with token service'}), 500
+
+
+@app.route('/users',methods=['GET'])
 def list_users():
     users = User.query.all()
-    return render_template('users.html', users=users)
+    user_list = [{
+        'id': user.id,
+        'username': user.username,
+        'password': user.password  # Be cautious about sending passwords in responses; consider security implications.
+    } for user in users]
+    print(user_list)
+    return json.dumps(user_list), 200, {'ContentType': 'application/json'}
 
 
 def get_token(username, password):
@@ -343,7 +354,6 @@ def update_all_events():
                 results[user.id] = "Events updated"
             else:
                 continue  # 获取数据失败，跳过当前用户
-                logging.info("failed to fetch data for user {user.username}")
 
         logging.info(f"Update results: {results}")
         return "All events updated", 200
@@ -356,6 +366,6 @@ if __name__ == '__main__':
         print("Database tables created")  # 确保数据库表已创建  
         setup_scheduler()
         print("Scheduler started")  # 确保定时器已启动
-        app.run(use_reloader=False) # 关闭 reloader 以避免冲突
+        app.run(host='0.0.0.0', port=5000,use_reloader=False) # 关闭 reloader 以避免冲突
 
 

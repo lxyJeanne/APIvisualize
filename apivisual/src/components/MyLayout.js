@@ -2,16 +2,29 @@ import {
   MenuFoldOutlined,
   UserSwitchOutlined,
   DatabaseOutlined,
+  UserOutlined,
 } from '@ant-design/icons'
-import { Button, Layout, Menu, theme } from 'antd'
-import { useState } from 'react'
+import { Button, Layout, Menu, theme,message} from 'antd'
 import { logo } from "../tools"
-import { useNavigate } from 'react-router-dom'
+import { useNavigate,useLocation } from 'react-router-dom'
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { useUsers } from '../UserContext';
 
 const { Header, Sider, Content } = Layout
+
 const MyLayout = ({ children }) => {
+  const {users, setUsers} = useUsers(); // 从 UserContext 中获取用户列表
   const [collapsed, setCollapsed] = useState(false)
   const navigate = useNavigate()
+  const location = useLocation(); // 获取当前路由位置
+
+  useEffect(() => {
+    console.log("Users:", users);
+  }, []);
+
+   // 根据当前路由路径确定选中的菜单项
+   const selectedKeys = [location.pathname];
 
   const {
     token: { colorBgContainer },
@@ -27,6 +40,7 @@ const MyLayout = ({ children }) => {
         <Menu
           theme="light"
           mode="inline"
+          selectedKeys={selectedKeys} // 动态设置选中的菜单项
           defaultSelectedKeys={['/']}
           onClick={({ key }) => {
             // alert(key)
@@ -35,6 +49,11 @@ const MyLayout = ({ children }) => {
           items={[
             {
               key: '/',
+              icon: <UserOutlined />,
+              label: 'User',
+            },
+            {
+              key: '/message',
               icon: <DatabaseOutlined />,
               label: 'All Messages',
             },
@@ -42,16 +61,10 @@ const MyLayout = ({ children }) => {
               key: '/hpp_account',
               icon: <UserSwitchOutlined />,
               label: 'HPP Account',
-              children: [
-                {
-                  label: 'Account 1',
-                  key: '/hpp_account/account_1',
-                },
-                {
-                  label: 'Account 2',
-                  key: '/hpp_account/account_2',
-                }
-              ]
+              children: users.map(user => ({
+                label: `${user?.id} - ${user?.username}`, // Using optional chaining
+                key: `/hpp_account/account_${user?.id}`,
+              })),
             },
           ]}
         />
