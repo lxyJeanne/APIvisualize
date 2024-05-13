@@ -4,7 +4,7 @@ import { PlusOutlined, SearchOutlined, ReloadOutlined } from "@ant-design/icons"
 import axios from "axios";
 import Column from "antd/es/table/Column";
 import { useNavigate } from 'react-router-dom';
-import { useUsers } from '../UserContext';  // 全局用户状态
+import { useUsers } from '../UserContext';  
 import { API_ENDPOINTS } from "../apiConfig";
 
 const User = () => {
@@ -61,8 +61,7 @@ const User = () => {
 
     const handleView = (record) => {
         console.log(record);
-        message.success('View file');
-        navigate(`/hpp_account/account_${record.id}`, { state: { record } });
+        navigate(`/${record.username}`, { state: { record } });
     };
 
     useEffect(() => {

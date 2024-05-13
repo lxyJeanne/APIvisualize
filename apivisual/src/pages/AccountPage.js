@@ -3,19 +3,27 @@ import { Card, Button, Form, Input, Table, Space, message, DatePicker } from 'an
 import { SearchOutlined,ReloadOutlined } from "@ant-design/icons"
 import { useAlarm } from '../AlarmContext'  
 import Column from "antd/es/table/Column"
-import { useNavigate } from 'react-router-dom'
+import { useNavigate,useParams } from 'react-router-dom'
 import { API_ENDPOINTS } from "../apiConfig"
 
-const Message = () => {
-  const { alarms, setAlarms,fetchAlarms } = useAlarm();  
-  const [filteredResults, setFilteredResults] = useState([]);
-  const [searchInput, setSearchInput] = useState('');
-  const navigate = useNavigate()
+const AccountPage = () => {
+    const params = useParams(); 
+    const Account = Object.values(params)[0];
+    console.log("Account=", Account);
 
-  useEffect(() => {
-    console.log("Alarm message updated:", alarms);
-}, [alarms]);
+    const { alarms, setAlarms, fetchAlarms } = useAlarm();
+    const [filteredAlarms, setFilteredAlarms] = useState([]);
+    const navigate = useNavigate();  
+    const [searchInput, setSearchInput] = useState('');
 
+
+    // Fetch alarms on mount and filter by accountId
+    useEffect(() => {
+        fetchAlarms().then(() => {
+            const filteredData = alarms.filter(alarm => alarm.app_key === Account);
+            setFilteredAlarms(filteredData);
+        });
+    }, [Account, alarms, fetchAlarms]);
 
   return (
     <>
@@ -40,9 +48,6 @@ const Message = () => {
               direction="vertical"
             >
               <Space direction="horizontal" style={{ display: 'flex', marginBottom: 20 }}>
-                <Form.Item label='HPP Account' name='HPP Account'>
-                  <Input placeholder="Please enter HPP account" />
-                </Form.Item>
                 <Form.Item label='Device Serial' name='Device Serial'>
                   <Input placeholder="Please enter device number" />
                 </Form.Item>
@@ -75,12 +80,9 @@ const Message = () => {
           <Space direction="horizontal" style={{ display: 'flex', marginBottom: 20 }}> </Space>
           {/* {searchInput.length > 1 ? ( */}
             <Table
-              dataSource={alarms}
+              dataSource={filteredAlarms}
               pagination={{ pageSize: 6 }}
               >
-              <Column
-                title="HPP account" dataIndex="app_key" key="app_key"
-              />
               <Column
                 title="Device serial" dataIndex="device_serial" key="device_serial"
               />
@@ -127,8 +129,7 @@ const Message = () => {
       </Card>
       
     </>
+  );
+};
 
-  )
-}
-
-export default Message
+export default AccountPage;

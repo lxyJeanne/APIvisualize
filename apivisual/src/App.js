@@ -1,28 +1,26 @@
 import React from 'react';
-import { UserProvider } from "./UserContext"; // 确保路径正确
 import MyLayout from "./components/MyLayout";
-import { Routes, Route, BrowserRouter as Router } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import User from "./pages/user";
-import Categories from "./pages/FILE/categories";
-import FileList from "./pages/FILE/list";
+import { UserProvider } from './UserContext';
 import Message from './pages/message';
 import { AlarmProvider } from './AlarmContext';
 
+
 const App = () => {
-  return (
-    <UserProvider>
-      <AlarmProvider>
-        <MyLayout>
-          <Routes>
-            <Route path='/' element={<User />} />
-            <Route path='/message' element={<Message />} />
-            <Route path='/hpp_account/account_1' element={<FileList />} />
-            <Route path='/hpp_account/account_2' element={<Categories />} />
-          </Routes>
-        </MyLayout>
-      </AlarmProvider>
-    </UserProvider>
-  );
+    return (
+        <UserProvider>
+          <AlarmProvider>
+            <MyLayout>
+              <Routes>
+                <Route path='/' element={<User />} />
+                <Route path='/message' element={<Message />} />
+                {/* Account routes are handled inside MyLayout or another component */}
+              </Routes>
+            </MyLayout>
+          </AlarmProvider>
+        </UserProvider>
+    );
 }
 
 export default App;

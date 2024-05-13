@@ -294,10 +294,13 @@ def parse_json(json_data):
         # 直接访问 CIDEvent 对象，不需要额外的 json.loads
         cid_event = event.get('CIDEvent', {})
         print("CID Event Data:", cid_event)
-    
-        # 尝试从 JSON 中提取 trigger_time 并转换为 datetime 对象
-        trigger_time_str = event.get('triggerTime', '')
-        trigger_time = datetime.fromisoformat(trigger_time_str) if trigger_time_str else None
+
+        # Extract triggerTime or dateTime and convert it to a datetime object
+        trigger_time_str = event.get('triggerTime') or event.get('dateTime', '')
+        if trigger_time_str:
+            trigger_time = datetime.fromisoformat(trigger_time_str)
+        else:
+            trigger_time = None  # Handle cases where neither is provided
 
         return {
             'device_serial': event.get('deviceSerial', ''),
@@ -329,9 +332,13 @@ def parse_and_store_data(data_list, user_id, app_key):
             continue  # 如果数据格式既不是 XML 也不是 JSON，则跳过
         parsed_data['app_key'] = app_key  # 将 username 添加到解析的数据中
 
-        # 检查事件是否已存在        
+         # 如果dateTime不存在，则跳过此条目
+        if not parsed_data or not parsed_data['trigger_time']:
+            continue
+
+        # 检查事件是否已存在于数据库中        
         if event_exists(parsed_data):
-            continue  # 如果已存在，跳过此条目
+            continue  
 
         # 将解析后的数据添加到数据库
         event = Event(**parsed_data)

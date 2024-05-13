@@ -1,51 +1,37 @@
-import {
-  MenuFoldOutlined,
-  UserSwitchOutlined,
-  DatabaseOutlined,
-  UserOutlined,
-} from '@ant-design/icons'
-import { Button, Layout, Menu, theme,message} from 'antd'
-import { logo } from "../tools"
-import { useNavigate,useLocation } from 'react-router-dom'
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { Layout, Menu, Button,theme } from 'antd';
+import { MenuFoldOutlined, UserSwitchOutlined, DatabaseOutlined, UserOutlined } from '@ant-design/icons';
+import { useNavigate, useLocation, Route, Routes } from 'react-router-dom';
 import { useUsers } from '../UserContext';
+import AccountPage from '../pages/AccountPage';
+import { logo } from "../tools";
 
-const { Header, Sider, Content } = Layout
+const { Header, Sider, Content } = Layout;
 
 const MyLayout = ({ children }) => {
-  const {users, setUsers} = useUsers(); // 从 UserContext 中获取用户列表
-  const [collapsed, setCollapsed] = useState(false)
-  const navigate = useNavigate()
-  const location = useLocation(); // 获取当前路由位置
+  const { users } = useUsers();
+  const [collapsed, setCollapsed] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  useEffect(() => {
-    console.log("Users:", users);
-  }, []);
-
-   // 根据当前路由路径确定选中的菜单项
-   const selectedKeys = [location.pathname];
+  const selectedKeys = [location.pathname];
 
   const {
     token: { colorBgContainer },
-  } = theme.useToken()
+  } = theme.useToken();
+
   return (
-    <Layout style={{ width: '100vw', height: '100vh' }}
-      id='components-layout-demo-custom-trigger'
-    >
+    <Layout style={{ width: '100vw', height: '100vh' }} id='components-layout-demo-custom-trigger'>
       <Sider trigger={null} collapsible collapsed={collapsed}>
-        <div className="logo" >
+        <div className="logo">
           <img src={logo} alt='logo' />
         </div>
         <Menu
           theme="light"
           mode="inline"
-          selectedKeys={selectedKeys} // 动态设置选中的菜单项
+          selectedKeys={selectedKeys}
           defaultSelectedKeys={['/']}
-          onClick={({ key }) => {
-            // alert(key)
-            navigate(key)
-          }}
+          onClick={({ key }) => navigate(key)}
           items={[
             {
               key: '/',
@@ -62,8 +48,8 @@ const MyLayout = ({ children }) => {
               icon: <UserSwitchOutlined />,
               label: 'HPP Account',
               children: users.map(user => ({
-                label: `${user?.id} - ${user?.username}`, // Using optional chaining
-                key: `/hpp_account/account_${user?.id}`,
+                label: `User ${user.id} - ${user.username}`,
+                key: `/${user.username}`,
               })),
             },
           ]}
@@ -71,37 +57,26 @@ const MyLayout = ({ children }) => {
       </Sider>
 
       <Layout>
-        <Header
-          style={{
-            padding: 0,
-            background: colorBgContainer,
-          }}
-        >
+        <Header style={{ padding: 0, background: colorBgContainer }}>
           <Button
             type="text"
             icon={collapsed ? <MenuFoldOutlined /> : <MenuFoldOutlined />}
             onClick={() => setCollapsed(!collapsed)}
-            style={{
-              fontSize: '16px',
-              width: 64,
-              height: 64,
-            }}
+            style={{ fontSize: '16px', width: 64, height: 64 }}
           />
           <span className='app-title'>ALARM MESSAGES</span>
-          
         </Header>
-        <Content
-          style={{
-            margin: '24px 16px',
-            padding: 24,
-            minHeight: 280,
-            background: colorBgContainer,
-          }}
-        >
+        <Content style={{ margin: '24px 16px', padding: 24, minHeight: 280, background: colorBgContainer }}>
           {children}
+          <Routes>
+            {users.map(user => (
+              <Route path={`/${user.username}`} element={<AccountPage />} />
+            ))}
+          </Routes>
         </Content>
       </Layout>
     </Layout>
-  )
-}
-export default MyLayout
+  );
+};
+
+export default MyLayout;
