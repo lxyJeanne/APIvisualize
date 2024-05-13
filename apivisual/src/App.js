@@ -6,10 +6,12 @@ import User from "./pages/user";
 import Categories from "./pages/FILE/categories";
 import FileList from "./pages/FILE/list";
 import Message from './pages/message';
+import { AlarmProvider } from './AlarmContext';
 
 const App = () => {
   return (
     <UserProvider>
+      <AlarmProvider>
         <MyLayout>
           <Routes>
             <Route path='/' element={<User />} />
@@ -18,6 +20,7 @@ const App = () => {
             <Route path='/hpp_account/account_2' element={<Categories />} />
           </Routes>
         </MyLayout>
+      </AlarmProvider>
     </UserProvider>
   );
 }

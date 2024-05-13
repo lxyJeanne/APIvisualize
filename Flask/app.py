@@ -179,6 +179,27 @@ def list_users():
     print(user_list)
     return json.dumps(user_list), 200, {'ContentType': 'application/json'}
 
+@app.route('/alarms',methods=['GET'])
+def list_alarm():
+    events = Event.query.all()
+    events_list = [{
+        'app_key': event.app_key,
+        'device_serial': event.device_serial,
+        'event_type': event.event_type,
+        'description': event.description,
+        'trigger_time': event.trigger_time.isoformat(),
+        'channel_name': event.channel_name,
+        'detection_target': event.detection_target,
+        'target_position': event.target_position,
+        'zone': event.zone,
+        'system_name': event.system_name,
+        'user_name': event.user_name,
+        'event_code': event.event_code,
+        'picture_url': event.picture_url     
+    } for event in events]
+    print(events_list)
+    return json.dumps(events_list), 200, {'ContentType': 'application/json'}
+
 
 def get_token(username, password):
     url = "https://api.hik-partner.com/api/hpcgw/v1/token/get"

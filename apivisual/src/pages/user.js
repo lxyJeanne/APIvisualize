@@ -4,18 +4,18 @@ import { PlusOutlined, SearchOutlined, ReloadOutlined } from "@ant-design/icons"
 import axios from "axios";
 import Column from "antd/es/table/Column";
 import { useNavigate } from 'react-router-dom';
-import { useUsers } from '../UserContext';  // 确保正确导入
+import { useUsers } from '../UserContext';  // 全局用户状态
+import { API_ENDPOINTS } from "../apiConfig";
 
 const User = () => {
-    const { users, setUsers,fetchUsers } = useUsers();  // 使用全局用户状态
+    const { users, setUsers,fetchUsers } = useUsers();  
     const [isShow, setIsShow] = useState(false);
     const [myForm] = Form.useForm();
-    const [alarmData, setAlarmData] = useState([]);
     const navigate = useNavigate();
 
     const handleFormSubmit = async (values) => {
         try {
-            const response = await axios.post('http://10.198.67.90:5000/submit', {
+            const response = await axios.post(API_ENDPOINTS.submit, {
                 appkey: values.appkey,
                 secretkey: values.secretkey
             }, {
@@ -27,9 +27,8 @@ const User = () => {
                 const data = response.data;
                 if (data.status === 'success') {
                     message.success(data.message || 'Success submit');
-                    // 确保你访问的是正确的数据属性
                     fetchUsers();  // 重新获取所有用户数据，确保列表是最新的
-                    setIsShow(false);  // 关闭模态框
+                    setIsShow(false);  
                 } else {
                     throw new Error(data.message || 'An unexpected error occurred');
                 }
@@ -44,7 +43,7 @@ const User = () => {
 
     const handleDelete = async (record) => {
         try {
-            const response = await axios.post('http://10.198.67.90:5000/delete', {
+            const response = await axios.post(API_ENDPOINTS.delete, {
                 username: record.username,
                 password: record.password
             });
@@ -87,7 +86,7 @@ const User = () => {
                         }}
                         direction="vertical"
                     >
-                        <Form.Item label="全局搜索" name="globalSearch">
+                        <Form.Item label="Search Global" name="globalSearch">
                             <Input placeholder="Search across all fields" />
                         </Form.Item>
                         <Form.Item style={{ marginLeft: 'auto' }}>
@@ -98,40 +97,36 @@ const User = () => {
                         </Form.Item>
                     </Form>
                 </Space>
-                <Table dataSource={users}>
-                    <Column title="id" dataIndex="id" key="id" />
-                    <Column title="账户名" dataIndex="username" key="username" />
-                    <Column title="密码" dataIndex="password" key="password" />
-                    <Column
-                        title="操作"
-                        key="action"
-                        render={(_, record) => {
-                            if (!record || !record.id) return <span>Data missing!</span>;
-                            return (
-                                <Space size="middle">
-                                    <a onClick={() => handleView(record)}>查看</a>
-                                    <a onClick={() => handleDelete(record)}>删除</a>
-                                </Space>
-                            );
-                        }}
-                    />
-                </Table>
+                <Space direction="vertical" style={{ width: '100%' }}>
+                    <Table dataSource={users}>
+                        <Column title="id" dataIndex="id" key="id" />
+                        <Column title="Hpp Account" dataIndex="username" key="username" />
+                        <Column title="Password" dataIndex="password" key="password" />
+                        <Column
+                            title="Action"
+                            key="action"
+                            render={(_, record) => {
+                                if (!record || !record.id) return <span>Data missing!</span>;
+                                return (
+                                    <Space size="middle">
+                                        <a onClick={() => handleView(record)}>View</a>
+                                        <a onClick={() => handleDelete(record)}>Delete</a>
+                                    </Space>
+                                );
+                            }}
+                        />
+                    </Table>
+                </Space>
             </Card>
             <Modal
-                title='添加HPP账户'
+                title='Add User'
                 open={isShow}
                 onCancel={() => setIsShow(false)}
                 onOk={() => myForm.submit()}
                 destroyOnClose
                 maskClosable={false}
                 footer={() => (
-                    <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-                        <Button key="delete" type="danger" style={{ border: '1px solid red' }} onClick={() => {
-                            myForm.setFieldsValue({ action: 'delete' });
-                            myForm.submit();
-                        }}>
-                            Delete
-                        </Button>
+                    <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
                         <div>
                             <Button key="cancel" onClick={() => setIsShow(false)}>
                                 Cancel

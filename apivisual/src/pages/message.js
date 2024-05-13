@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from "react"
-import { Card, Button, Form, Input, Table, Space, Modal, message, DatePicker } from 'antd'
-import { PlusOutlined, SearchOutlined,ReloadOutlined } from "@ant-design/icons"
-import axios from "axios"
+import { Card, Button, Form, Input, Table, Space, message, DatePicker } from 'antd'
+import {  SearchOutlined,ReloadOutlined } from "@ant-design/icons"
+import { useAlarm } from '../AlarmContext'  // 确保正确导入
 import Column from "antd/es/table/Column"
 import { useNavigate } from 'react-router-dom'
+import { API_ENDPOINTS } from "../apiConfig"
 
 const Message = () => {
-  const [isShow, setIsShow] = useState(false)  //controle Uploading Modal present/hide
-  const [myForm] = Form.useForm() //get form element
-  const [alarmData, setAlarmData] = useState([])
+  const { alarms, setAlarms,fetchAlarms } = useAlarm();  
   const [filteredResults, setFilteredResults] = useState([]);
   const [searchInput, setSearchInput] = useState('');
   const navigate = useNavigate()
@@ -41,19 +40,16 @@ const Message = () => {
   // }
 
   useEffect(() => {
-    // getData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    console.log("Alarm message updated:", alarms);
+}, [alarms]);
 
 
   return (
     <>
       <Card title='Alarm List' 
-        extra={<Button type="primary" icon={<ReloadOutlined />}>
+        extra={<Button type="primary" icon={<ReloadOutlined />} onClick={() => setAlarms([...alarms])}>
         </Button>}
       >
-
-        {/* {useEffect(() => { getData(); }, [])} */}
 
         <Space direction="vertical" style={{ width: '100%' }}>
             <Form layout="inline"
@@ -63,39 +59,30 @@ const Message = () => {
               direction="vertical"
             >
               <Space direction="horizontal" style={{ display: 'flex', marginBottom: 20 }}>
-                <Form.Item label='HPP编号' name='HPP编号'>
+                <Form.Item label='HPP Account' name='HPP Account'>
                   <Input placeholder="Please enter HPP account" />
                 </Form.Item>
-                <Form.Item label='设备编号' name='设备编号'>
+                <Form.Item label='Device Serial' name='Device Serial'>
                   <Input placeholder="Please enter device number" />
                 </Form.Item>
               </Space>
 
-              {/* Second Row */}
               <Space direction="horizontal" style={{ display: 'flex', marginBottom: 20 }}>
-                <Form.Item label='报警类型' name='报警类型'>
+                <Form.Item label='Alarm Type' name='Alarm Type'>
                   <Input placeholder="Please enter alarm type" />
                 </Form.Item>
-                <Form.Item label='触发事件' name='触发事件'>
+                <Form.Item label='Alarm Description' name='Alarm Description'>
                   <Input placeholder="Please enter trigger event" />
                 </Form.Item>
               </Space>
 
-              {/* DatePicker in its own row */}
-              <Form.Item label='时间范围' name='时间范围'>
+              <Form.Item label='Time Range' name='Time Range'>
                 <DatePicker.RangePicker
                   showTime={{ format: 'HH:mm' }}
                   format="YYYY-MM-DD HH:mm"
                 />
               </Form.Item>
 
-              {/* 全局搜索栏 */}
-              <Space direction="vertical" style={{ width: '100%' }}></Space>
-              <Form.Item label="全局搜索" name="globalSearch">
-                <Input placeholder="Search across all fields" />
-              </Form.Item>
-              {/* Search button in its own row */}
-              
               <Form.Item style={{ marginLeft: 'auto' }}>
                 <Button type="primary"  htmlType="submit">
                   <SearchOutlined />
@@ -107,29 +94,50 @@ const Message = () => {
           <Space direction="horizontal" style={{ display: 'flex', marginBottom: 20 }}> </Space>
           {/* {searchInput.length > 1 ? ( */}
             <Table
-              dataSource={filteredResults}>
+              dataSource={alarms}
+              pagination={{ pageSize: 6 }}
+              >
               <Column
-                title="HPP编号" dataIndex="HPP_account" key="HPP_account"
+                title="HPP_account" dataIndex="app_key" key="app_key"
               />
               <Column
-                title="设备编号" dataIndex="device_serial" key="device_serial"
+                title="Device_serial" dataIndex="device_serial" key="device_serial"
               />
               <Column
-                title="报警类型" dataIndex="event_type" key="event_type"
+                title="Event_type" dataIndex="event_type" key="event_type"
               />
               <Column
-                title="触发时间" dataIndex="trigger_time" key="trigger_time"
+                title="Description" dataIndex="description" key="description"
               />
               <Column
-                title="操作"
+                title="Trigger_time" dataIndex="trigger_time" key="trigger_time"
+              />
+              <Column
+                title="Channel" dataIndex="channel_name" key="channel_name"
+              />
+              <Column
+                title="Dectection_target" dataIndex="detection_target" key="detection_target"
+              />
+              <Column
+                title="Target_position" dataIndex="target_position" key="target_position"
+              />
+              <Column
+                title="Zone" dataIndex="zone" key="zone"
+              />
+              <Column
+                title="Partition" dataIndex="system_name" key="system_name"
+              />
+              <Column
+                title="User Name" dataIndex="user_name" key="user_name"
+              />
+              <Column
+                title="Event Code" dataIndex="event_code" key="event_code"
+              />
+              <Column
+                title="Action"
                 key="action"
-                render={(_, dataIndex) => (
-                  <a onClick={(v) => {
-                    // console.log(text)
-                    console.log(dataIndex)
-                    message.success('View file')
-                    navigate('', { state: { dataIndex } })
-                  }}>
+                render={() => (
+                  <a href="http://10.198.67.90:5000/alarms" target="_blank" rel="noopener noreferrer">
                     查看
                   </a>
                 )}

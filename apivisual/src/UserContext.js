@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import axios from 'axios';
+import { API_ENDPOINTS } from './apiConfig';
 
 const UserContext = createContext();
 
@@ -14,7 +15,7 @@ export const UserProvider = ({ children }) => {
         setLoading(true);
         setError(null);
         try {
-            const response = await axios.get('http://10.198.67.90:5000/users');
+            const response = await axios.get(API_ENDPOINTS.users);
             setUsers(response.data);
             setLoading(false);
         } catch (error) {
