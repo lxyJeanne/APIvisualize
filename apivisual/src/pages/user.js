@@ -97,7 +97,7 @@ const User = () => {
                     </Form>
                 </Space>
                 <Space direction="vertical" style={{ width: '100%' }}>
-                    <Table dataSource={users}>
+                    <Table dataSource={users}  pagination={{ pageSize: 5 }}>
                         <Column title="id" dataIndex="id" key="id" />
                         <Column title="Hpp Account" dataIndex="username" key="username" />
                         <Column title="Password" dataIndex="password" key="password" />

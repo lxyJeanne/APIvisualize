@@ -9,15 +9,17 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from flask_cors import CORS
 from apscheduler.schedulers.background import BackgroundScheduler
 import logging
+from flask_caching import Cache
 
 def setup_scheduler():
-    logging.basicConfig(level=logging.INFO)
+    # logging.basicConfig(level=logging.INFO)
     scheduler = BackgroundScheduler()
     scheduler.add_job(func=update_all_events, trigger="interval", minutes=1)
     scheduler.start()
 
 app = Flask(__name__)
 CORS(app)       # 允许跨域请求
+cache = Cache(app, config={'CACHE_TYPE': 'simple'})  # 设置缓存类型为 simple
 # Ensure the SECRET_KEY is set to a secure, random value when deploying.
 app.config['SECRET_KEY'] = 'your-secret-key'  # Replace with a real secret key.
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///user.db'
@@ -32,7 +34,7 @@ class User(db.Model):
     token = db.Column(db.String(255), nullable=True)  
     # 确保 token_expiry 字段可以存储时区信息
     token_expiry = db.Column(DateTime(timezone=True), nullable=True)
-    print("User table created")
+
 
 class Event(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -49,7 +51,7 @@ class Event(db.Model):
     user_name = db.Column(db.String(120), nullable=True)
     event_code = db.Column(db.Integer, nullable=True)
     picture_url = db.Column(db.String(255), nullable=True)
-    print("Event table created")
+
 
 @app.route('/')
 def page_login():
@@ -176,10 +178,10 @@ def list_users():
         'username': user.username,
         'password': user.password  # Be cautious about sending passwords in responses; consider security implications.
     } for user in users]
-    print(user_list)
     return json.dumps(user_list), 200, {'ContentType': 'application/json'}
 
 @app.route('/alarms',methods=['GET'])
+@cache.cached(timeout=50)  # 缓存50秒
 def list_alarm():
     events = Event.query.all()
     events_list = [{
@@ -197,7 +199,6 @@ def list_alarm():
         'event_code': event.event_code,
         'picture_url': event.picture_url     
     } for event in events]
-    print(events_list)
     return json.dumps(events_list), 200, {'ContentType': 'application/json'}
 
 
@@ -289,11 +290,9 @@ def parse_json(json_data):
     try:
         # 解析 JSON 数据
         event = json.loads(json_data)
-        print("Complete Event Data:", event)
 
         # 直接访问 CIDEvent 对象，不需要额外的 json.loads
         cid_event = event.get('CIDEvent', {})
-        print("CID Event Data:", cid_event)
 
         # Extract triggerTime or dateTime and convert it to a datetime object
         trigger_time_str = event.get('triggerTime') or event.get('dateTime', '')
@@ -317,7 +316,6 @@ def parse_json(json_data):
             'picture_url': event.get('pictureURL', '')
         }
     except json.JSONDecodeError:
-        print("Error decoding JSON")
         return None
 
 def parse_and_store_data(data_list, user_id, app_key):
@@ -332,18 +330,17 @@ def parse_and_store_data(data_list, user_id, app_key):
             continue  # 如果数据格式既不是 XML 也不是 JSON，则跳过
         parsed_data['app_key'] = app_key  # 将 username 添加到解析的数据中
 
-         # 如果dateTime不存在，则跳过此条目
         if not parsed_data or not parsed_data['trigger_time']:
             continue
 
-        # 检查事件是否已存在于数据库中        
-        if event_exists(parsed_data):
-            continue  
-
-        # 将解析后的数据添加到数据库
-        event = Event(**parsed_data)
-        db.session.add(event)
-    db.session.commit()
+        # 检查事件是否已存在于数据库中
+        if not event_exists(parsed_data):
+            # 将解析后的数据添加到数据库
+            event = Event(**parsed_data)
+            db.session.add(event)
+            db.session.commit()  # 确保添加到数据库
+            # 保存原始数据到文本文件
+            save_data_to_txt(data_item)
 
 def event_exists(parsed_data):
     # 检查相同的 device_serial, trigger_time 和 event_type 是否已存在
@@ -353,13 +350,19 @@ def event_exists(parsed_data):
         trigger_time=parsed_data['trigger_time']
     ).first() is not None
 
+def save_data_to_txt(data, filename="events_log.txt"):
+    """将原始数据保存到文本文件"""
+    with open(filename, "a") as f:
+        json.dump(data, f)
+        f.write('\n')
+
+
 @app.route('/update-all-events')
 def update_all_events():
     with app.app_context():  # 创建一个应用上下文
         users = User.query.all()
-        results={}
         for user in users:
-            logging.info(f"Updating events for user: {user.username}")
+            # logging.info(f"Updating events for user: {user.username}")
             if not is_token_valid(user):
                 token_response = get_token(user.username, user.password)
                 if token_response.ok:
@@ -378,22 +381,19 @@ def update_all_events():
             response = fetch_data(user.username, user.password, user.token)
             if response.ok:
                 data_list = response.json().get('data', {}).get('list', [])
-                parse_and_store_data(data_list, user.id, user.username)  # 传入 app_key
-                results[user.id] = "Events updated"
+                parse_and_store_data(data_list, user.id, user.username)  # 传入 app_key        
             else:
                 continue  # 获取数据失败，跳过当前用户
 
-        logging.info(f"Update results: {results}")
+        # logging.info(f"Update results: {results}")
         return "All events updated", 200
 
 
 # 在应用启动时调用定时器设置
 if __name__ == '__main__':
     with app.app_context():
-        db.create_all() # 创建所有数据库表
-        print("Database tables created")  # 确保数据库表已创建  
+        db.create_all() # 创建所有数据库表 
         setup_scheduler()
-        print("Scheduler started")  # 确保定时器已启动
         app.run(host='0.0.0.0', port=5000,use_reloader=False) # 关闭 reloader 以避免冲突
 
 

@@ -17,14 +17,23 @@ const AccountPage = () => {
     const [searchInput, setSearchInput] = useState('');
 
 
-    // Fetch alarms on mount and filter by accountId
     useEffect(() => {
+      const fetchAndFilterAlarms = () => {
         fetchAlarms().then(() => {
-            const filteredData = alarms.filter(alarm => alarm.app_key === Account);
-            setFilteredAlarms(filteredData);
+          const filteredData = alarms.filter(alarm => alarm.app_key === Account);
+          setFilteredAlarms(filteredData);
         });
-    }, [Account, alarms, fetchAlarms]);
-
+      };
+      // Immediately fetch and filter alarms on mount
+      fetchAndFilterAlarms();
+      // Set up the interval to regularly fetch and filter alarms
+      const interval = setInterval(() => {
+        fetchAndFilterAlarms();
+      }, 30000);  // Adjust the interval time as needed
+      // Cleanup function to clear the interval when component unmounts
+      return () => clearInterval(interval);
+    }, []);
+  
   return (
     <>
       <Card title='Alarm List' 
@@ -81,7 +90,7 @@ const AccountPage = () => {
           {/* {searchInput.length > 1 ? ( */}
             <Table
               dataSource={filteredAlarms}
-              pagination={{ pageSize: 6 }}
+              pagination={{ pageSize: 5 }}
               >
               <Column
                 title="Device serial" dataIndex="device_serial" key="device_serial"

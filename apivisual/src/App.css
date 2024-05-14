@@ -12,6 +12,16 @@
     animation: App-logo-spin infinite 20s linear;
   }
 }
+/* 假设全局样式已经设置了 box-sizing: border-box; 如果没有，请确保添加这个属性 */
+.ant-layout {
+  min-height: 100vh; /* 整个布局占满整个视口高度 */
+}
+
+.ant-layout-content {
+  padding: 24px;
+  overflow: auto; /* 允许内容内部滚动，而非整个页面滚动 */
+  height: calc(100vh - 64px); /* 减去头部的高度 */
+}
 
 .App-header {
   background-color: #282c34;

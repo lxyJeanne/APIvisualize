@@ -13,8 +13,11 @@ const Message = () => {
   const navigate = useNavigate()
 
   useEffect(() => {
-    console.log("Alarm message updated:", alarms);
-}, [alarms]);
+    const interval = setInterval(() => {
+        fetchAlarms();
+    }, 30000); // 每30秒请求一次，而不是每秒
+    return () => clearInterval(interval);
+}, []);
 
 
   return (
@@ -76,7 +79,8 @@ const Message = () => {
           {/* {searchInput.length > 1 ? ( */}
             <Table
               dataSource={alarms}
-              pagination={{ pageSize: 6 }}
+              pagination={{ pageSize: 5 }}
+              style={{ width: '100%' }} // 确保表格宽度填满容器
               >
               <Column
                 title="HPP account" dataIndex="app_key" key="app_key"
@@ -119,7 +123,7 @@ const Message = () => {
                 key="action"
                 render={() => (
                   <a href={API_ENDPOINTS.alarms} target="_blank" rel="noopener noreferrer">
-                    查看
+                    View
                   </a>
                 )}
               />

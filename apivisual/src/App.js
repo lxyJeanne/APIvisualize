@@ -5,7 +5,7 @@ import User from "./pages/user";
 import { UserProvider } from './UserContext';
 import Message from './pages/message';
 import { AlarmProvider } from './AlarmContext';
-
+import './App.css';
 
 const App = () => {
     return (
