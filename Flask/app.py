@@ -1,5 +1,5 @@
 import json
-from flask import Flask, jsonify, render_template, request, url_for, redirect
+from flask import Flask, jsonify, render_template, request, url_for, redirect, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 import requests
 from datetime import datetime, timezone
@@ -8,8 +8,9 @@ from sqlalchemy import DateTime
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask_cors import CORS
 from apscheduler.schedulers.background import BackgroundScheduler
-import logging
+from werkzeug.utils import secure_filename, safe_join
 from flask_caching import Cache
+import os
 
 def setup_scheduler():
     # logging.basicConfig(level=logging.INFO)
@@ -225,36 +226,48 @@ def fetch_data(username, password, token):
     return response
 
 
-@app.route('/fetch-data/<int:user_id>')
-def fetch_user_data(user_id):
-    user = User.query.get(user_id)
+# @app.route('/fetch-data/<int:user_id>')
+# def fetch_user_data(user_id):
+#     user = User.query.get(user_id)
+#     if not user:
+#         return "User not found", 404
+
+#     if not is_token_valid(user):
+#         # Token 过期或无效，重新获取并更新
+#         token_response = get_token(user.username, user.password)
+#         if token_response.ok:
+#             json_response = token_response.json()
+#             if json_response.get('errorCode') == "0" and json_response.get('data'):
+#                 user.token = json_response['data']['accessToken']
+#                 expire_time = datetime.fromtimestamp(json_response['data']['expireTime'] / 1000.0, timezone.utc)
+#                 user.token_expiry = expire_time
+#                 db.session.commit()
+#             else:
+#                 return f"Failed to renew token: {json_response.get('errorCode')}", 500
+#         else:
+#             return "Failed to communicate with token service for renewal", 500
+
+#     # Token 是有效的，获取数据
+#     response = fetch_data(user.username, user.password, user.token)
+#     if response.ok:
+#         
+#         # return f"Data fetched and stored for user {user_id}"
+#         return response.json() #根据 API 返回的数据格式
+#     else:
+#         return "Failed to fetch data", response.status_code
+
+@app.route('/fetch-data/<appKey>')
+def fetch_user_data(appKey):
+    user = User.query.filter_by(username=appKey).first()
     if not user:
-        return "User not found", 404
-
-    if not is_token_valid(user):
-        # Token 过期或无效，重新获取并更新
-        token_response = get_token(user.username, user.password)
-        if token_response.ok:
-            json_response = token_response.json()
-            if json_response.get('errorCode') == "0" and json_response.get('data'):
-                user.token = json_response['data']['accessToken']
-                expire_time = datetime.fromtimestamp(json_response['data']['expireTime'] / 1000.0, timezone.utc)
-                user.token_expiry = expire_time
-                db.session.commit()
-            else:
-                return f"Failed to renew token: {json_response.get('errorCode')}", 500
-        else:
-            return "Failed to communicate with token service for renewal", 500
-
-    # Token 是有效的，获取数据
+        return jsonify({"error": "User not found"}), 404
+    
+    # 假设 fetch_data 是一个外部函数
     response = fetch_data(user.username, user.password, user.token)
     if response.ok:
-        data_list = response.json()['data']['list']
-        parse_and_store_data(data_list, user_id, user.username)
-        # return f"Data fetched and stored for user {user_id}"
-        return response.json() #根据 API 返回的数据格式
+        return jsonify(response.json())  # 确保返回 JSON 格式的数据
     else:
-        return "Failed to fetch data", response.status_code
+        return jsonify({"error": "Failed to fetch data"}), response.status_code
 
 
 def is_token_valid(user):
@@ -356,6 +369,34 @@ def save_data_to_txt(data, filename="events_log.txt"):
         json.dump(data, f)
         f.write('\n')
 
+@app.route('/download/<filename>')
+def download_file(filename):
+    directory = os.getcwd()  # 返回当前工作目录的路径
+    try:
+        # Ensures the path is safe
+        safe_path = safe_join(directory, filename)
+        if safe_path is None:
+            return "Invalid file path", 400
+        return send_from_directory(directory, filename, as_attachment=True)
+    except FileNotFoundError:
+        return "File not found", 404
+
+@app.route('/clear', methods=['POST'])
+def clear():
+    data = request.get_json()  # Parse JSON data from the request
+
+    if data['data'] == "all":
+        # Clear all data if "all" is received
+        db.drop_all()
+        db.create_all()
+        return jsonify(message="All data cleared"), 200
+    else:
+        app_key = data['data']
+        # Clear specific entries in the Event and User tables
+        Event.query.filter_by(app_key=app_key).delete()
+        User.query.filter_by(username=app_key).delete()
+        db.session.commit()
+        return jsonify(message=f"Data for {app_key} cleared"), 200
 
 @app.route('/update-all-events')
 def update_all_events():

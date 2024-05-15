@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react"
 import { Card, Button, Form, Input, Table, Space, message, DatePicker } from 'antd'
-import { SearchOutlined,ReloadOutlined } from "@ant-design/icons"
+import { SearchOutlined,DownloadOutlined , ClearOutlined} from "@ant-design/icons"
 import { useAlarm } from '../AlarmContext'  
 import Column from "antd/es/table/Column"
 import { useNavigate } from 'react-router-dom'
 import { API_ENDPOINTS } from "../apiConfig"
+import axios from "axios"
 
 const Message = () => {
   const { alarms, setAlarms,fetchAlarms } = useAlarm();  
@@ -18,7 +19,33 @@ const Message = () => {
     }, 30000); // 每30秒请求一次，而不是每秒
     return () => clearInterval(interval);
 }, []);
-
+function handleClear() {
+  if (window.confirm("Are you sure you want to clear?")) {
+      // 如果用户点击“确定”，则发送 POST 请求
+      axios.post(API_ENDPOINTS.clear, {
+          data: "all"
+      })
+      .then(response => {
+          console.log('Success:', response.data);
+          // 如果请求成功，刷新页面
+          window.location.reload();
+      })
+      .catch(error => {
+          console.error('Error:', error);
+          if (error.response) {
+              // 请求已发出，但服务器响应的状态码不在 2xx 范围内
+              console.error('Error status', error.response.status);
+              console.error('Error data', error.response.data);
+          } else if (error.request) {
+              console.error('No response', error.request);
+          } else {
+              console.error('Error', error.message);
+          }
+      });
+  } else {
+      console.log('User canceled the action.');
+  }
+}
 
   return (
     <>
@@ -30,7 +57,11 @@ const Message = () => {
             CID_code Chart
             </Button>
           </a>  
-          <Button type="primary" icon={<ReloadOutlined />} onClick={() => setAlarms([...alarms])}>
+          <Button type="primary" icon={<DownloadOutlined />} onClick={() =>window.location.href = API_ENDPOINTS.download }>
+          Download
+          </Button>
+          <Button type="primary" danger icon={<ClearOutlined /> } onClick={handleClear}>
+          Clear
           </Button>
         </Space>}
       >
@@ -79,7 +110,7 @@ const Message = () => {
           {/* {searchInput.length > 1 ? ( */}
             <Table
               dataSource={alarms}
-              pagination={{ pageSize: 5 }}
+              size="middle"
               style={{ width: '100%' }} // 确保表格宽度填满容器
               >
               <Column
@@ -136,3 +167,4 @@ const Message = () => {
 }
 
 export default Message
+

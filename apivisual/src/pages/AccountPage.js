@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react"
 import { Card, Button, Form, Input, Table, Space, message, DatePicker } from 'antd'
-import { SearchOutlined,ReloadOutlined } from "@ant-design/icons"
+import { SearchOutlined,DownloadOutlined,ClearOutlined ,SendOutlined } from "@ant-design/icons"
 import { useAlarm } from '../AlarmContext'  
 import Column from "antd/es/table/Column"
 import { useNavigate,useParams } from 'react-router-dom'
 import { API_ENDPOINTS } from "../apiConfig"
+import axios from "axios"
 
 const AccountPage = () => {
     const params = useParams(); 
@@ -24,16 +25,42 @@ const AccountPage = () => {
           setFilteredAlarms(filteredData);
         });
       };
-      // Immediately fetch and filter alarms on mount
       fetchAndFilterAlarms();
-      // Set up the interval to regularly fetch and filter alarms
       const interval = setInterval(() => {
         fetchAndFilterAlarms();
-      }, 30000);  // Adjust the interval time as needed
-      // Cleanup function to clear the interval when component unmounts
+      }, 30000);  
       return () => clearInterval(interval);
     }, []);
   
+    function handleClear() {
+      if (window.confirm("Are you sure you want to clear?")) {
+          // 如果用户点击“确定”，则发送 POST 请求
+          axios.post(API_ENDPOINTS.clear, {
+              data: Account
+          })
+          .then(response => {
+              console.log('Success:', response.data);
+              // 如果请求成功，刷新页面
+              window.location.reload();
+          })
+          .catch(error => {
+              console.error('Error:', error);
+              if (error.response) {
+                  // 请求已发出，但服务器响应的状态码不在 2xx 范围内
+                  console.error('Error status', error.response.status);
+                  console.error('Error data', error.response.data);
+              } else if (error.request) {
+                  console.error('No response', error.request);
+              } else {
+                  console.error('Error', error.message);
+              }
+          });
+      } else {
+          console.log('User canceled the action.');
+      }
+  }
+  
+
   return (
     <>
       <Card title='Alarm List' 
@@ -44,7 +71,14 @@ const AccountPage = () => {
             CID_code Chart
             </Button>
           </a>  
-          <Button type="primary" icon={<ReloadOutlined />} onClick={() => setAlarms([...alarms])}>
+          <Button type="primary" icon={<DownloadOutlined />} onClick={() =>window.location.href = API_ENDPOINTS.download }>
+          Download
+          </Button>
+          <Button type="primary" danger icon={<ClearOutlined /> } onClick={handleClear}>
+          Clear
+          </Button>
+          <Button type="primary" icon={<SendOutlined />} onClick={() =>window.location.href = `${API_ENDPOINTS.fetch}/${Account}`}>
+          Fetch 
           </Button>
         </Space>}
       >
@@ -90,7 +124,7 @@ const AccountPage = () => {
           {/* {searchInput.length > 1 ? ( */}
             <Table
               dataSource={filteredAlarms}
-              pagination={{ pageSize: 5 }}
+              size="middle"
               >
               <Column
                 title="Device serial" dataIndex="device_serial" key="device_serial"
@@ -130,7 +164,7 @@ const AccountPage = () => {
                 key="action"
                 render={() => (
                   <a href={API_ENDPOINTS.alarms} target="_blank" rel="noopener noreferrer">
-                    查看
+                    View
                   </a>
                 )}
               />

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Card, Button, Form, Input, Table, Space, Modal, message } from 'antd';
-import { PlusOutlined, SearchOutlined, ReloadOutlined } from "@ant-design/icons";
+import { PlusOutlined, SearchOutlined } from "@ant-design/icons";
 import axios from "axios";
 import Column from "antd/es/table/Column";
 import { useNavigate } from 'react-router-dom';
@@ -59,6 +59,34 @@ const User = () => {
         }
     };
 
+    function handleClear(record) {
+        if (window.confirm("Are you sure you want to clear?")) {
+            // 如果用户点击“确定”，则发送 POST 请求
+            axios.post(API_ENDPOINTS.clear, {
+                data: record.username
+            })
+            .then(response => {
+                console.log('Success:', response.data);
+                // 如果请求成功，刷新页面
+                window.location.reload();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                if (error.response) {
+                    // 请求已发出，但服务器响应的状态码不在 2xx 范围内
+                    console.error('Error status', error.response.status);
+                    console.error('Error data', error.response.data);
+                } else if (error.request) {
+                    console.error('No response', error.request);
+                } else {
+                    console.error('Error', error.message);
+                }
+            });
+        } else {
+            console.log('User canceled the action.');
+        }
+      }
+
     const handleView = (record) => {
         console.log(record);
         navigate(`/${record.username}`, { state: { record } });
@@ -73,8 +101,6 @@ const User = () => {
             <Card title='User List'
                 extra={
                     <Space>
-                        <Button type="primary" icon={<ReloadOutlined />} onClick={() => setUsers([...users])}>
-                        </Button>
                         <Button type="primary" icon={<PlusOutlined onClick={() => setIsShow(true)} />} />
                     </Space>
                 }>
@@ -109,7 +135,8 @@ const User = () => {
                                 return (
                                     <Space size="middle">
                                         <a onClick={() => handleView(record)}>View</a>
-                                        <a onClick={() => handleDelete(record)}>Delete</a>
+                                        <a onClick={() => handleDelete(record)}>Unsubscribe</a>
+                                        <a onClick={() => handleClear(record)}>Clear</a>
                                     </Space>
                                 );
                             }}
