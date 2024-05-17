@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Layout, Menu, Button,theme } from 'antd';
 import { MenuFoldOutlined, UserSwitchOutlined, DatabaseOutlined, UserOutlined } from '@ant-design/icons';
 import { useNavigate, useLocation, Route, Routes } from 'react-router-dom';
@@ -66,7 +66,7 @@ const MyLayout = ({ children }) => {
           />
           <span className='app-title'>ALARM MESSAGES</span>
         </Header>
-        <Content style={{ margin: '24px 16px', padding: 24, minHeight: 280, background: colorBgContainer }}>
+        <Content  style={{ margin: '24px 16px', padding: 24, minHeight: 280, background: colorBgContainer }}>
           {children}
           <Routes>
             {users.map(user => (

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Card, Button, Form, Input, Table, Space, Modal, message } from 'antd';
-import { PlusOutlined, SearchOutlined } from "@ant-design/icons";
+import { PlusOutlined, SearchOutlined,DownloadOutlined } from "@ant-design/icons";
 import axios from "axios";
 import Column from "antd/es/table/Column";
 import { useNavigate } from 'react-router-dom';
@@ -11,7 +11,9 @@ const User = () => {
     const { users, setUsers,fetchUsers } = useUsers();  
     const [isShow, setIsShow] = useState(false);
     const [myForm] = Form.useForm();
+    const [searchForm] = Form.useForm();
     const navigate = useNavigate();
+    const [searchResults, setSearchResults] = useState([]);
 
     const handleFormSubmit = async (values) => {
         try {
@@ -92,8 +94,25 @@ const User = () => {
         navigate(`/${record.username}`, { state: { record } });
     };
 
+    const handleSearch = (values) => {
+        const searchValue = values.globalSearch.toLowerCase();
+        const filteredResults = users.filter(user =>
+            user.username.toLowerCase().includes(searchValue) ||
+            user.password.toLowerCase().includes(searchValue) ||
+            user.id.toString().includes(searchValue)
+        );
+        setSearchResults(filteredResults);
+        message.success('Search completed');
+    };
+
+    const handleClearSearch = () => {
+        setSearchResults(users);
+        searchForm.resetFields(['globalSearch']);
+        message.info('Search cleared');
+    };
+
     useEffect(() => {
-        console.log("Users updated:", users);
+        setSearchResults(users);
     }, [users]);
 
     return (
@@ -101,20 +120,23 @@ const User = () => {
             <Card title='User List'
                 extra={
                     <Space>
+                        <Button type="primary" icon={<DownloadOutlined />} onClick={() => window.location.href = API_ENDPOINTS.download}>
+                            Log
+                        </Button>
                         <Button type="primary" icon={<PlusOutlined onClick={() => setIsShow(true)} />} />
                     </Space>
                 }>
                 <Space direction="vertical" style={{ width: '100%' }}>
-                    <Form layout="inline"
-                        onFinish={(v) => {
-                            message.success('Search succeed');
-                        }}
+                    <Form layout="inline" onFinish={handleSearch} form={searchForm}
                         direction="vertical"
                     >
                         <Form.Item label="Search Global" name="globalSearch">
                             <Input placeholder="Search across all fields" />
                         </Form.Item>
                         <Form.Item style={{ marginLeft: 'auto' }}>
+                        <Button type="link" onClick={handleClearSearch} style={{ color: 'gray', fontSize: '12px'}} >
+                                Clear
+                            </Button>
                             <Button type="primary" htmlType="submit">
                                 <SearchOutlined />
                                 Search
@@ -123,7 +145,7 @@ const User = () => {
                     </Form>
                 </Space>
                 <Space direction="vertical" style={{ width: '100%' }}>
-                    <Table dataSource={users}  pagination={{ pageSize: 5 }}>
+                    <Table dataSource={searchResults}  pagination={{ pageSize: 5 }}>
                         <Column title="id" dataIndex="id" key="id" />
                         <Column title="Hpp Account" dataIndex="username" key="username" />
                         <Column title="Password" dataIndex="password" key="password" />
