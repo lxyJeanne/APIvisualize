@@ -8,7 +8,7 @@ from sqlalchemy import DateTime
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask_cors import CORS
 from apscheduler.schedulers.background import BackgroundScheduler
-from werkzeug.utils import secure_filename, safe_join
+from werkzeug.utils import  safe_join
 from flask_caching import Cache
 import os
 
@@ -48,7 +48,9 @@ class Event(db.Model):
     detection_target = db.Column(db.String(255), nullable=True)
     target_position = db.Column(db.String(255), nullable=True)
     zone = db.Column(db.String(50), nullable=True)
-    system_name = db.Column(db.String(120), nullable=True)
+    zone_name = db.Column(db.String(50), nullable=True) #新增字段
+    system = db.Column(db.String(120), nullable=True)
+    system_name = db.Column(db.String(120), nullable=True) #新增字段
     user_name = db.Column(db.String(120), nullable=True)
     event_code = db.Column(db.Integer, nullable=True)
     picture_url = db.Column(db.String(255), nullable=True)
@@ -57,61 +59,6 @@ class Event(db.Model):
 @app.route('/')
 def page_login():
     return render_template('login.html', method=request.method)
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        data = request.get_json()  # 获取 JSON 数据
-        username = data['appkey']
-        password = data['secretkey']
-        action = data('action', 'login')    # 获取 action 参数
-        
-        # 如果 action 为 delete，则删除用户
-        if action == 'delete':
-            user = User.query.filter_by(username=username, password=password).first()
-            if user:
-                db.session.delete(user)
-                db.session.commit()
-                return "User deleted successfully"
-            else:
-                return "User not found", 404
-        # 否则，尝试获取 token
-        if not username or not password:
-            return "Username and password are required", 400
-        if User.query.filter_by(username=username).first():
-            return "Username already exists", 400
-        
-        new_user = User(username=username, password=password)
-        db.session.add(new_user)
-        db.session.commit()
-        # 尝试获取 token
-        token_response = get_token(username, password)
-        if token_response.ok:
-            json_response = token_response.json()
-            if json_response.get('errorCode') == "0" and json_response.get('data'):
-                new_user.token = json_response['data']['accessToken']
-
-                # 处理时间戳
-                timestamp_ms = json_response['data'].get('expireTime')
-                if timestamp_ms:
-                    expire_time = datetime.fromtimestamp(timestamp_ms / 1000.0, timezone.utc)
-                    new_user.token_expiry = expire_time
-                db.session.commit()
-                return "User registered with token"
-            else:
-                # 获取 token 失败，删除添加的用户
-                db.session.delete(new_user)
-                db.session.commit()
-                return f"Failed to get token: {json_response.get('errorCode')}", 500
-        else:
-            # 通信失败，删除添加的用户
-            db.session.delete(new_user)
-            db.session.commit()
-            return "Failed to communicate with token service", 500
-            #应当确保已经在 db.session.add(new_user) 后执行了 db.session.commit()
-            #因为只有提交后，才能确保数据库中已存在该记录，从而可以被删除。
-    else:
-        return redirect(url_for('page_login'))
 
 @app.route('/submit', methods=['POST'])
 def submit():
@@ -170,7 +117,6 @@ def authenticate_user():
         db.session.commit()
         return jsonify({'status': 'error', 'message': 'Failed to communicate with token service'}), 500
 
-
 @app.route('/users',methods=['GET'])
 def list_users():
     users = User.query.all()
@@ -181,6 +127,10 @@ def list_users():
     } for user in users]
     return json.dumps(user_list), 200, {'ContentType': 'application/json'}
 
+def format_time(time_str):
+    """将时间字符串中的 'T' 替换为空格"""
+    return time_str.replace('T', ' ')
+
 @app.route('/alarms',methods=['GET'])
 @cache.cached(timeout=50)  # 缓存50秒
 def list_alarm():
@@ -190,18 +140,19 @@ def list_alarm():
         'device_serial': event.device_serial,
         'event_type': event.event_type,
         'description': event.description,
-        'trigger_time': event.trigger_time.isoformat(),
+        'trigger_time': format_time(event.trigger_time.isoformat()),
         'channel_name': event.channel_name,
         'detection_target': event.detection_target,
         'target_position': event.target_position,
         'zone': event.zone,
+        'zone_name': event.zone_name,
+        'system': event.system,
         'system_name': event.system_name,
         'user_name': event.user_name,
         'event_code': event.event_code,
         'picture_url': event.picture_url     
     } for event in events]
     return json.dumps(events_list), 200, {'ContentType': 'application/json'}
-
 
 def get_token(username, password):
     url = "https://api.hik-partner.com/api/hpcgw/v1/token/get"
@@ -225,37 +176,6 @@ def fetch_data(username, password, token):
     response = requests.post(url, json=data, headers=headers)
     return response
 
-
-# @app.route('/fetch-data/<int:user_id>')
-# def fetch_user_data(user_id):
-#     user = User.query.get(user_id)
-#     if not user:
-#         return "User not found", 404
-
-#     if not is_token_valid(user):
-#         # Token 过期或无效，重新获取并更新
-#         token_response = get_token(user.username, user.password)
-#         if token_response.ok:
-#             json_response = token_response.json()
-#             if json_response.get('errorCode') == "0" and json_response.get('data'):
-#                 user.token = json_response['data']['accessToken']
-#                 expire_time = datetime.fromtimestamp(json_response['data']['expireTime'] / 1000.0, timezone.utc)
-#                 user.token_expiry = expire_time
-#                 db.session.commit()
-#             else:
-#                 return f"Failed to renew token: {json_response.get('errorCode')}", 500
-#         else:
-#             return "Failed to communicate with token service for renewal", 500
-
-#     # Token 是有效的，获取数据
-#     response = fetch_data(user.username, user.password, user.token)
-#     if response.ok:
-#         
-#         # return f"Data fetched and stored for user {user_id}"
-#         return response.json() #根据 API 返回的数据格式
-#     else:
-#         return "Failed to fetch data", response.status_code
-
 @app.route('/fetch-data/<appKey>')
 def fetch_user_data(appKey):
     user = User.query.filter_by(username=appKey).first()
@@ -265,6 +185,7 @@ def fetch_user_data(appKey):
     # 假设 fetch_data 是一个外部函数
     response = fetch_data(user.username, user.password, user.token)
     if response.ok:
+
         return jsonify(response.json())  # 确保返回 JSON 格式的数据
     else:
         return jsonify({"error": "Failed to fetch data"}), response.status_code
@@ -292,12 +213,15 @@ def parse_xml(xml_data):
         'detection_target': root.find('.//DetectionRegionEntry').findtext('.//detectionTarget') if root.find('.//DetectionRegionEntry') is not None else '',
         'target_position': f"{root.findtext('.//X')},{root.findtext('.//Y')},{root.findtext('.//width')},{root.findtext('.//height')}",
         'zone': '',
+        'zone_name': '',
+        'system': '',
         'system_name': '',
         'user_name': '',
-        'event_code': None,
-        'picture_url': None
+        'event_code': '',
+        'picture_url': ''
     }
     return data
+
 
 def parse_json(json_data):
     try:
@@ -307,31 +231,58 @@ def parse_json(json_data):
         # 直接访问 CIDEvent 对象，不需要额外的 json.loads
         cid_event = event.get('CIDEvent', {})
 
-        # Extract triggerTime or dateTime and convert it to a datetime object
-        trigger_time_str = event.get('triggerTime') or event.get('dateTime', '')
+        # 提取 eventDescription
+        event_description = event.get('eventDescription', '')
+
+        # 根据 eventDescription 提取 trigger_time
+        if event_description == 'Linkage':
+            # 如果 eventDescription 为 Linkage，从 pictureList 中提取 trigger_time
+            picture_list = event.get('pictureList', [])
+            if picture_list:
+                trigger_time_str = picture_list[0].get('triggerTime', '')
+            else:
+                trigger_time_str = ''
+        else:
+            # 否则，从主事件对象中提取 trigger_time
+            trigger_time_str = event.get('triggerTime') or event.get('dateTime', '')
+
         if trigger_time_str:
             trigger_time = datetime.fromisoformat(trigger_time_str)
         else:
             trigger_time = None  # Handle cases where neither is provided
 
+        # 提取 pictureList 链接
+        picture_urls = []
+        picture_list = event.get('pictureList', [])
+        for picture in picture_list:
+            url = picture.get('url')
+            if url:
+                picture_urls.append(url)
+
+        # 将所有链接拼接成一个字符串，使用逗号分隔
+        picture_url_str = ','.join(picture_urls)
+
         return {
             'device_serial': event.get('deviceSerial', ''),
             'event_type': event.get('eventType', ''),
-            'description': cid_event.get('description', ''),
+            'description': cid_event.get('description', event_description),
             'trigger_time': trigger_time,
             'channel_name': event.get('channelName', ''),
             'detection_target': cid_event.get('detectionTarget', ''),
             'target_position': '',
             'zone': cid_event.get('zone', ''),
-            'system_name': cid_event.get('systemName', ''),
+            'zone_name': cid_event.get('zoneName', ''),  # 新增字段
+            'system': cid_event.get('system', ''),
+            'system_name': cid_event.get('systemName', ''), # 新增字段
             'user_name': cid_event.get('userName', ''),
-            'event_code': cid_event.get('code', None),
-            'picture_url': event.get('pictureURL', '')
+            'event_code': cid_event.get('code', ''),
+            'picture_url': picture_url_str  # 保存拼接后的链接字符串
         }
     except json.JSONDecodeError:
         return None
 
-def parse_and_store_data(data_list, user_id, app_key):
+
+def parse_and_store_data(data_list, app_key):
     for data_item in data_list:
         format_type = data_item['formatType']
         alarm_data = data_item['alarmData']
