@@ -1,7 +1,7 @@
 {
     "builds": [
       {
-        "src": "Flask/app.py",
+        "src": "/app.py",
         "use": "@vercel/python",
         "config": {
           "maxLambdaSize": "15mb"
@@ -10,8 +10,8 @@
     ],
     "routes": [
       {
-        "src": "/Flask/(.*)",
-        "dest": "/Flask/app.py"
+        "src": "/(.*)",
+        "dest": "/app.py"
       }
     ]
   }
