@@ -7,7 +7,6 @@ import xml.etree.ElementTree as ET
 from sqlalchemy import DateTime
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask_cors import CORS
-from apscheduler.schedulers.background import BackgroundScheduler
 from flask_caching import Cache
 import os
 
@@ -22,9 +21,18 @@ def setup_scheduler():
 app = Flask(__name__)
 CORS(app)       # 允许跨域请求
 cache = Cache(app, config={'CACHE_TYPE': 'simple'})  # 设置缓存类型为 simple
-# Ensure the SECRET_KEY is set to a secure, random value when deploying.
+
+
+# 确定数据库文件路径
+if os.getenv('VERCEL'):
+    # 如果在 Vercel 环境中，使用 /tmp 目录
+    db_path = '/tmp/user.db'
+else:
+    # 如果在本地开发环境中，使用当前项目目录
+    db_path = os.path.join(os.path.dirname(__file__), 'user.db')
+
 app.config['SECRET_KEY'] = 'your-secret-key'  # Replace with a real secret key.
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///user.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
