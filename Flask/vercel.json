@@ -13,12 +13,6 @@
         "src": "/Flask/(.*)",
         "dest": "/Flask/app.py"
       }
-    ],
-    "rewrites": [
-      {
-        "source": "/(.*)",
-        "destination": "/Flask/app"
-      }
     ]
   }
   
