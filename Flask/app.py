@@ -1,5 +1,5 @@
 import json
-from flask import Flask, jsonify, render_template, request, url_for, redirect, send_from_directory
+from flask import Flask, jsonify, render_template, request,  send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 import requests
 from datetime import datetime, timezone
@@ -8,14 +8,13 @@ from sqlalchemy import DateTime
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask_cors import CORS
 from apscheduler.schedulers.background import BackgroundScheduler
-from werkzeug.utils import  safe_join
 from flask_caching import Cache
 import os
 
 def setup_scheduler():
     # logging.basicConfig(level=logging.INFO)
     scheduler = BackgroundScheduler()
-    scheduler.add_job(func=update_all_events, trigger="interval", minutes=1)
+    scheduler.add_job(func=update_all_events, trigger="interval", seconds=30)
     scheduler.start()
 
 app = Flask(__name__)
@@ -35,6 +34,8 @@ class User(db.Model):
     token = db.Column(db.String(255), nullable=True)  
     # 确保 token_expiry 字段可以存储时区信息
     token_expiry = db.Column(DateTime(timezone=True), nullable=True)
+    enable_log = db.Column(db.Boolean, default=False)
+    start_time = db.Column(DateTime(timezone=True), nullable=True)
 
 
 class Event(db.Model):
@@ -47,6 +48,8 @@ class Event(db.Model):
     channel_name = db.Column(db.String(255), nullable=True)
     detection_target = db.Column(db.String(255), nullable=True)
     target_position = db.Column(db.String(255), nullable=True)
+
+    device_number = db.Column(db.String(50), nullable=True)
     zone = db.Column(db.String(50), nullable=True)
     zone_name = db.Column(db.String(50), nullable=True) #新增字段
     system = db.Column(db.String(120), nullable=True)
@@ -63,20 +66,6 @@ def page_login():
 @app.route('/submit', methods=['POST'])
 def submit():
     return authenticate_user()
-
-@app.route('/delete', methods=['POST'])
-def delete_user():
-    data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')  # 注意安全性，实际应用中可能需要更安全的验证方式
-
-    user = User.query.filter_by(username=username, password=password).first()
-    if user:
-        db.session.delete(user)
-        db.session.commit()
-        return jsonify({"message": "User deleted successfully"}), 200
-    else:
-        return jsonify({"message": "User not found"}), 404
 
 def authenticate_user():
     data = request.get_json()  # 获取 JSON 数据
@@ -123,7 +112,9 @@ def list_users():
     user_list = [{
         'id': user.id,
         'username': user.username,
-        'password': user.password  # Be cautious about sending passwords in responses; consider security implications.
+        'password': user.password,
+        'enable_log': user.enable_log.__str__(),
+        'start_time': user.start_time.isoformat() if user.start_time else None
     } for user in users]
     return json.dumps(user_list), 200, {'ContentType': 'application/json'}
 
@@ -144,6 +135,8 @@ def list_alarm():
         'channel_name': event.channel_name,
         'detection_target': event.detection_target,
         'target_position': event.target_position,
+
+        'device_number': event.device_number,
         'zone': event.zone,
         'zone_name': event.zone_name,
         'system': event.system,
@@ -185,7 +178,11 @@ def fetch_user_data(appKey):
     # 假设 fetch_data 是一个外部函数
     response = fetch_data(user.username, user.password, user.token)
     if response.ok:
-
+        data_list = response.json().get('data', {}).get('list', [])
+        
+        # 存储数据到数据库
+        parse_and_store_data(data_list, user.username)
+        print(f"Data 成功 fetched for {appKey}")
         return jsonify(response.json())  # 确保返回 JSON 格式的数据
     else:
         return jsonify({"error": "Failed to fetch data"}), response.status_code
@@ -204,24 +201,61 @@ def is_token_valid(user):
 
 def parse_xml(xml_data):
     root = ET.fromstring(xml_data)
+    
+    # 处理命名空间
+    ns = {'ns': 'http://www.isapi.org/ver20/XMLSchema'}
+    
+    # 使用字典的 get 方法尝试获取命名空间元素
+    device_serial = root.findtext('.//ns:deviceSerial', namespaces=ns) or root.findtext('.//deviceSerial')
+    event_type = root.findtext('.//ns:eventType', namespaces=ns) or root.findtext('.//eventType')
+    description = root.findtext('.//ns:eventDescription', namespaces=ns) or root.findtext('.//eventDescription')
+    trigger_time_str = root.findtext('.//ns:triggerTime', namespaces=ns) or root.findtext('.//triggerTime')
+    channel_name = root.findtext('.//ns:channelName', namespaces=ns) or root.findtext('.//channelName')
+    
+    # 检查 DetectionRegionEntry 的存在
+    detection_entry = root.find('.//ns:DetectionRegionEntry', namespaces=ns) or root.find('.//DetectionRegionEntry')
+    detection_target = ''
+    if detection_entry is not None:
+        detection_target = detection_entry.findtext('ns:detectionTarget', namespaces=ns) or detection_entry.findtext('detectionTarget')
+    
+    # 检查 TargetRect 的存在
+    target_position = ''
+    if detection_entry is not None:
+        target_rect = detection_entry.find('ns:TargetRect', namespaces=ns) or detection_entry.find('TargetRect')
+        if target_rect is not None:
+            x = target_rect.findtext('ns:X', namespaces=ns) or target_rect.findtext('X')
+            y = target_rect.findtext('ns:Y', namespaces=ns) or target_rect.findtext('Y')
+            width = target_rect.findtext('ns:width', namespaces=ns) or target_rect.findtext('width')
+            height = target_rect.findtext('ns:height', namespaces=ns) or target_rect.findtext('height')
+            target_position = f"{x},{y},{width},{height}"
+    
+    # 检查 pictureList 的存在
+    picture_urls = [url_elem.text for url_elem in root.findall('.//ns:pictureList/ns:url', namespaces=ns)] or \
+                   [url_elem.text for url_elem in root.findall('.//pictureList/url')]
+    picture_url_str = ','.join(picture_urls) if picture_urls else ''
+    
+    # 验证所有关键字段
+    if not device_serial or not trigger_time_str:
+        raise ValueError("Missing required fields in XML data")
+
     data = {
-        'device_serial': root.findtext('.//deviceSerial'),
-        'event_type': root.findtext('.//eventType'),
-        'description': root.findtext('.//eventDescription'),
-        'trigger_time': datetime.fromisoformat(root.findtext('.//triggerTime')),
-        'channel_name': root.findtext('.//channelName'),
-        'detection_target': root.find('.//DetectionRegionEntry').findtext('.//detectionTarget') if root.find('.//DetectionRegionEntry') is not None else '',
-        'target_position': f"{root.findtext('.//X')},{root.findtext('.//Y')},{root.findtext('.//width')},{root.findtext('.//height')}",
+        'device_serial': device_serial,
+        'event_type': event_type,
+        'description': description,
+        'trigger_time': datetime.fromisoformat(trigger_time_str),
+        'channel_name': channel_name,
+        'detection_target': detection_target,
+        'target_position': target_position,
+        'device_number': '',    # JSON 
         'zone': '',
         'zone_name': '',
         'system': '',
         'system_name': '',
         'user_name': '',
         'event_code': '',
-        'picture_url': ''
+        'picture_url': picture_url_str
     }
     return data
-
 
 def parse_json(json_data):
     try:
@@ -270,10 +304,12 @@ def parse_json(json_data):
             'channel_name': event.get('channelName', ''),
             'detection_target': cid_event.get('detectionTarget', ''),
             'target_position': '',
+
+            'device_number': cid_event.get('deviceNo', ''), 
             'zone': cid_event.get('zone', ''),
-            'zone_name': cid_event.get('zoneName', ''),  # 新增字段
+            'zone_name': cid_event.get('zoneName', ''),  
             'system': cid_event.get('system', ''),
-            'system_name': cid_event.get('systemName', ''), # 新增字段
+            'system_name': cid_event.get('systemName', ''), 
             'user_name': cid_event.get('userName', ''),
             'event_code': cid_event.get('code', ''),
             'picture_url': picture_url_str  # 保存拼接后的链接字符串
@@ -281,8 +317,49 @@ def parse_json(json_data):
     except json.JSONDecodeError:
         return None
 
+@app.route('/writeLog', methods=['POST'])
+def write_log():
+    data = request.get_json()
+    username = data.get('username')
+
+    user = User.query.filter_by(username=username).first()
+    if not user:
+        return jsonify({"message": "User not found"}), 404
+
+    if not user.enable_log:
+        user.enable_log = True
+        if not user.start_time:
+            user.start_time = datetime.now(timezone.utc)
+            db.session.commit()
+
+            log_filename = f'logs/{username}_{user.start_time.strftime("%Y%m%d%H%M%S")}_log.txt'
+            if not os.path.exists('logs'):
+                os.makedirs('logs')
+            open(log_filename, 'w').close()  # 创建一个空文件
+        db.session.commit()
+        return jsonify({"message": "Log started"}), 200
+    else:
+        return jsonify({"message": "Log is already enabled"}), 400
+
+@app.route('/stopLog', methods=['POST'])
+def stop_log():
+    data = request.get_json()
+    username = data.get('username')
+
+    user = User.query.filter_by(username=username).first()
+    if not user:
+        return jsonify({"message": "User not found"}), 404
+
+    user.enable_log = False
+    db.session.commit()
+
+    return jsonify({"message": "Log stopped"}), 200
 
 def parse_and_store_data(data_list, app_key):
+    user = User.query.filter_by(username=app_key).first()
+    if not user:
+        return  # 如果用户不存在，跳过
+    
     for data_item in data_list:
         format_type = data_item['formatType']
         alarm_data = data_item['alarmData']
@@ -292,10 +369,8 @@ def parse_and_store_data(data_list, app_key):
             parsed_data = parse_json(alarm_data)
         else:
             continue  # 如果数据格式既不是 XML 也不是 JSON，则跳过
-        parsed_data['app_key'] = app_key  # 将 username 添加到解析的数据中
 
-        if not parsed_data or not parsed_data['trigger_time']:
-            continue
+        parsed_data['app_key'] = app_key  # 将 username 添加到解析的数据中
 
         # 检查事件是否已存在于数据库中
         if not event_exists(parsed_data):
@@ -303,8 +378,11 @@ def parse_and_store_data(data_list, app_key):
             event = Event(**parsed_data)
             db.session.add(event)
             db.session.commit()  # 确保添加到数据库
-            # 保存原始数据到文本文件
-            save_data_to_txt(data_item)
+
+            # 如果用户启用了日志记录，则将数据写入日志文件
+            if user.enable_log:
+                log_filename = f'logs/{app_key}_{user.start_time.strftime("%Y%m%d%H%M%S")}_log.txt'
+                save_data_to_txt(data_item, log_filename)
 
 def event_exists(parsed_data):
     # 检查相同的 device_serial, trigger_time 和 event_type 是否已存在
@@ -314,23 +392,50 @@ def event_exists(parsed_data):
         trigger_time=parsed_data['trigger_time']
     ).first() is not None
 
-def save_data_to_txt(data, filename="events_log.txt"):
+def save_data_to_txt(data, filename):
     """将原始数据保存到文本文件"""
     with open(filename, "a") as f:
         json.dump(data, f)
         f.write('\n')
 
-@app.route('/download/<filename>')
-def download_file(filename):
-    directory = os.getcwd()  # 返回当前工作目录的路径
+@app.route('/download', methods=['POST'])
+def download_file():
+    data = request.get_json()
+    username = data.get('username')  # 确保这里的参数名和前端一致
+
+    user = User.query.filter_by(username=username).first()
+    if not user:
+        return jsonify({"message": "User not found"}), 404
+
+    if not user.start_time:
+        return jsonify({"message": "Logging not started for this user"}), 400
+
+    log_filename = f'{user.username}_{user.start_time.strftime("%Y%m%d%H%M%S")}_log.txt'
+    
     try:
-        # Ensures the path is safe
-        safe_path = safe_join(directory, filename)
-        if safe_path is None:
-            return "Invalid file path", 400
-        return send_from_directory(directory, filename, as_attachment=True)
+        return send_from_directory('logs', log_filename, as_attachment=True)
     except FileNotFoundError:
-        return "File not found", 404
+        return jsonify({"message": "Log file not found"}), 404
+    
+
+@app.route('/deleteLog', methods=['POST'])
+def delete_log():
+    data = request.get_json()
+    username = data.get('username')
+
+    user = User.query.filter_by(username=username).first()
+    if not user:
+        return jsonify({"message": "User not found"}), 404
+
+    log_filename = f'logs/{username}_{user.start_time.strftime("%Y%m%d%H%M%S")}_log.txt'
+    try:
+        os.remove(log_filename)
+        user.enable_log = False
+        user.start_time = None
+        db.session.commit()
+        return jsonify({"message": "Log deleted"}), 200
+    except FileNotFoundError:
+        return jsonify({"message": "Log file not found"}), 404
 
 @app.route('/clear', methods=['POST'])
 def clear():
@@ -373,7 +478,7 @@ def update_all_events():
             response = fetch_data(user.username, user.password, user.token)
             if response.ok:
                 data_list = response.json().get('data', {}).get('list', [])
-                parse_and_store_data(data_list, user.id, user.username)  # 传入 app_key        
+                parse_and_store_data(data_list,  user.username)  # 传入 app_key        
             else:
                 continue  # 获取数据失败，跳过当前用户
 

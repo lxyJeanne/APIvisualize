@@ -18,7 +18,7 @@ const Message = () => {
     useEffect(() => {
         const interval = setInterval(() => {
             fetchAlarms();
-        }, 15000); // 每15秒请求一次
+        }, 10000); // 每5秒请求一次
         return () => clearInterval(interval);
     }, [fetchAlarms]);
 
@@ -205,14 +205,12 @@ const Message = () => {
                     />
                     <Column
                         title="Description" dataIndex="description" key="description"
-                        render={(text, record) => (
-                            record.description === "Linkage" ? <a href={record.picture_url}>{text}</a> : text
-                        )}
                         sorter={(a, b) => a.description.localeCompare(b.description)}
                     />
                     <Column
                         title="Trigger time" dataIndex="trigger_time" key="trigger_time"
-                        sorter={(a, b) => new Date(a.trigger_time) - new Date(b.trigger_time)}
+                        sorter={(a, b) => new Date(a.trigger_time) - new Date(b.trigger_time) }
+                        defaultSortOrder="descend"
                     />
                     <Column
                         title="Channel" dataIndex="channel_name" key="channel_name"
@@ -225,6 +223,10 @@ const Message = () => {
                     <Column
                         title="Position" dataIndex="target_position" key="target_position"
                         sorter={(a, b) => a.target_position.localeCompare(b.target_position)}
+                    />
+                    <Column
+                        title="DeviceNo" dataIndex="device_number" key="device_number"
+                        sorter={(a, b) => a.device_number.localeCompare(b.device_number)}
                     />
                     <Column
                         title="Zone" dataIndex="zone" key="zone"
@@ -251,22 +253,23 @@ const Message = () => {
                         sorter={(a, b) => a.event_code - b.event_code}
                     />
                     <Column
-                        title="Action"
-                        key="action"
-                        render={(_,record) => (
-                          <>
-                            {record.description === "Linkage" ? (
-                                <a href={record.picture_url} target="_blank" rel="noopener noreferrer">
-                                    URL
-                                </a>
-                            ) : (
-                                <a href={API_ENDPOINTS.alarms} target="_blank" rel="noopener noreferrer">
-                                    View
-                                </a>
-                            )}
-                        </>
+                    title="Action"
+                    key="action"
+                    render={(_, record) => (
+                        <>
+                      {record.picture_url ? (
+                          <a href={record.picture_url} target="_blank" rel="noopener noreferrer">
+                              URL
+                          </a>
+                      ) : (
+                          <a href={API_ENDPOINTS.alarms} target="_blank" rel="noopener noreferrer">
+                              View
+                          </a>
+                                )}
+                            </>
                         )}
                     />
+
                 </Table>
             </Card>
         </>

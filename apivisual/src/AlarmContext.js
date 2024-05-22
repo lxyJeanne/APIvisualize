@@ -26,7 +26,7 @@ export const AlarmProvider = ({ children }) => {
     };
 
     useEffect(() => {
-        fetchAlarms();
+        fetchAlarms();  // Fetch alarms when the component mounts
     }, []);
 
     return (

@@ -7,10 +7,12 @@ export const API_ENDPOINTS = {
     users: `${BASE_URL}/users`,
     alarms: `${BASE_URL}/alarms`,
     submit: `${BASE_URL}/submit`,
-    download: `${BASE_URL}/download/events_log.txt`,
+    download: `${BASE_URL}/download`,
     clear: `${BASE_URL}/clear`,
     fetch: `${BASE_URL}/fetch-data`,
-    delete: `${BASE_URL}/delete`
+    startLog: `${BASE_URL}/writeLog`,
+    stopLog: `${BASE_URL}/stopLog`,
+    deleteLog: `${BASE_URL}/deleteLog`,
 };
 
 export default BASE_URL;

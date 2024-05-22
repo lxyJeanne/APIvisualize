@@ -43,24 +43,6 @@ const User = () => {
         }
     };
 
-    const handleDelete = async (record) => {
-        try {
-            const response = await axios.post(API_ENDPOINTS.delete, {
-                username: record.username,
-                password: record.password
-            });
-            if (response.status === 200) {
-                setUsers(prevUsers => prevUsers.filter(user => user.id !== record.id));
-                message.success('User deleted successfully');
-            } else {
-                message.error(response.data.message);
-            }
-        } catch (error) {
-            console.error('Error deleting user:', error);
-            message.error('Failed to delete user');
-        }
-    };
-
     function handleClear(record) {
         if (window.confirm("Are you sure you want to clear?")) {
             // 如果用户点击“确定”，则发送 POST 请求
@@ -111,6 +93,89 @@ const User = () => {
         message.info('Search cleared');
     };
 
+    const handleStartLog = async (appkey) => {
+        try {
+            const response = await axios.post(API_ENDPOINTS.startLog, { username: appkey }, {
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            if (response.status === 200) {
+                message.success('Log started');
+                window.location.reload();
+            } else {
+                message.error(response.data.message);
+            }
+        } catch (error) {
+            console.error('Error starting log:', error);
+            message.error('Failed to start log');
+        }
+    };
+    
+    const handleStopLog = async (appkey) => {
+        try {
+            const response = await axios.post(API_ENDPOINTS.stopLog, { username: appkey }, {
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            if (response.status === 200) {
+                message.success('Log stopped');
+                window.location.reload();
+            } else {
+                message.error(response.data.message);
+            }
+        } catch (error) {
+            console.error('Error stopping log:', error);
+            message.error('Failed to stop log');
+        }
+    };
+    
+    const handleDownloadLog = async (appkey) => {
+        try {
+            const response = await axios.post(API_ENDPOINTS.download, { username: appkey }, {
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                responseType: 'blob' // Ensure the response is treated as a blob
+            });
+            if (response.status === 200) {
+                const url = window.URL.createObjectURL(new Blob([response.data]));
+                const link = document.createElement('a');
+                link.href = url;
+                link.setAttribute('download', `${appkey}_log.txt`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } else {
+                message.error(response.data.message);
+            }
+        } catch (error) {
+            console.error('Error downloading log:', error);
+            message.error('Failed to download log');
+        }
+    };
+    
+    
+    const handleDeleteLog = async (appkey) => {
+        if (window.confirm("Are you sure you want to delete log?")) {
+            try {
+                const response = await axios.post(API_ENDPOINTS.deleteLog, { username: appkey });
+                if (response.status === 200) {
+                    message.success('Log deleted');
+                    window.location.reload();
+                } else {
+                    message.error(response.data.message);
+                }
+            } catch (error) {
+                console.error('Error deleting log:', error);
+                message.error('Failed to delete log');
+            }
+        }else {
+            console.log('User canceled the action.');
+        }
+    };
+
     useEffect(() => {
         setSearchResults(users);
     }, [users]);
@@ -120,9 +185,6 @@ const User = () => {
             <Card title='User List'
                 extra={
                     <Space>
-                        <Button type="primary" icon={<DownloadOutlined />} onClick={() => window.location.href = API_ENDPOINTS.download}>
-                            Log
-                        </Button>
                         <Button type="primary" icon={<PlusOutlined onClick={() => setIsShow(true)} />} />
                     </Space>
                 }>
@@ -149,16 +211,34 @@ const User = () => {
                         <Column title="id" dataIndex="id" key="id" />
                         <Column title="Hpp Account" dataIndex="username" key="username" />
                         <Column title="Password" dataIndex="password" key="password" />
+                        <Column title="Enable Log" dataIndex="enable_log" key="enable_log" />
+                        <Column title="Start Log Time" dataIndex="start_time" key="start_time" 
+                                sorter={(a, b) => a.start_time - b.start_time}
+                        />
                         <Column
-                            title="Action"
+                            title="Database Action"
                             key="action"
                             render={(_, record) => {
                                 if (!record || !record.id) return <span>Data missing!</span>;
                                 return (
                                     <Space size="middle">
                                         <a onClick={() => handleView(record)}>View</a>
-                                        <a onClick={() => handleDelete(record)}>Unsubscribe</a>
-                                        <a onClick={() => handleClear(record)}>Clear</a>
+                                        <a onClick={() => handleClear(record)}>ClearDB</a>
+                                    </Space>
+                                );
+                            }}
+                        />
+                        <Column
+                            title="Log Action"
+                            key="action"
+                            render={(_, record) => {
+                                if (!record || !record.id) return <span>Data missing!</span>;
+                                return (
+                                    <Space size="middle">
+                                        <a onClick={() => handleStartLog(record.username)}>Start</a>
+                                        <a onClick={() => handleStopLog(record.username)}>Stop</a>
+                                        <a onClick={() => handleDownloadLog(record.username)}>Download</a>
+                                        <a onClick={() => handleDeleteLog(record.username)}>Delete</a>
                                     </Space>
                                 );
                             }}
