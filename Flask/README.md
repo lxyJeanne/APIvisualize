@@ -2,6 +2,10 @@
 
 [服务器端接口地址](127.0.0.1)
 
+python anywhere account:
+outlook mail: hik_alarm_apitest@outlook.com
+password: Hik123456
+
 ## 使用到的插件安装
 
 ```bash
