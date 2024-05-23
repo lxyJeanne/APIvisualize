@@ -4,7 +4,7 @@
 
 python anywhere account:
 outlook mail: hik_alarm_apitest@outlook.com
-password: Hik123456
+password: Hik123456  (两个密码都是这个)
 
 ## 使用到的插件安装
 
