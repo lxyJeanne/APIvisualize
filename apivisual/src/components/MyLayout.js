@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Layout, Menu, Button,theme } from 'antd';
+import { Layout, Menu, Button, theme } from 'antd';
 import { MenuFoldOutlined, UserSwitchOutlined, DatabaseOutlined, UserOutlined } from '@ant-design/icons';
 import { useNavigate, useLocation, Route, Routes } from 'react-router-dom';
 import { useUsers } from '../UserContext';
@@ -19,6 +19,12 @@ const MyLayout = ({ children }) => {
   const {
     token: { colorBgContainer },
   } = theme.useToken();
+
+  // 检查 users 是否是数组
+  const userMenuItems = Array.isArray(users) ? users.map(user => ({
+    label: `User ${user.id} - ${user.username}`,
+    key: `/${user.username}`,
+  })) : [];
 
   return (
     <Layout style={{ width: '100vw', height: '100vh' }} id='components-layout-demo-custom-trigger'>
@@ -47,10 +53,7 @@ const MyLayout = ({ children }) => {
               key: '/hpp_account',
               icon: <UserSwitchOutlined />,
               label: 'HPP Account',
-              children: users.map(user => ({
-                label: `User ${user.id} - ${user.username}`,
-                key: `/${user.username}`,
-              })),
+              children: userMenuItems,
             },
           ]}
         />
@@ -69,8 +72,8 @@ const MyLayout = ({ children }) => {
         <Content  style={{ margin: '24px 16px', padding: 24, minHeight: 280, background: colorBgContainer }}>
           {children}
           <Routes>
-            {users.map(user => (
-              <Route path={`/${user.username}`} element={<AccountPage />} />
+            {Array.isArray(users) && users.map(user => (
+              <Route key={user.username} path={`/${user.username}`} element={<AccountPage />} />
             ))}
           </Routes>
         </Content>
