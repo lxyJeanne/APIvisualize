@@ -6,25 +6,23 @@
 
 在开始之前，请确保你的电脑上已经安装了以下软件：
 
-- **Git**：用于克隆代码仓库。可以从 [Git 官方网站](https://git-scm.com/downloads)下载。
 - **Node.js 和 npm**：用于运行和管理前端依赖项。可以从 [Node.js 官方网站](https://nodejs.org/)下载。
 - **Python 3**：用于运行后端 Flask 服务器。可以从 [Python 官方网站](https://www.python.org/)下载。
 
 ## 克隆仓库
 
-首先，克隆这个代码仓库到你的本地电脑：
+首先，下载ZIp压缩包并解压。
 
+打开CMD或者Bash，进入目录：
 ```sh
-git clone https://github.com/lxyJeanne/APIvisualize.git
-cd APIvisualize
+cd C:\Users\User.name\Desktop\APIvisual #替换成实际文件夹目录
 ```
 
 ## 安装依赖项：
-确保你目前处于APIvisualize文件夹中
-例如：C:\Users\User.name\Desktop\APIvisual
 
 **后端**
 
+复制下面文本到CMD：
 ```sh
 cd Flask
 python -m venv venv
@@ -49,16 +47,18 @@ Press CTRL+C to quit
 
 **前端**
 
+
+复制下面文本到CMD：
 ```sh
-cd apivisual
+cd ../apivisual
 npm install #安装依赖库
 ```
-找到后端的主机IP地址，将http://（Ip address) 复制到apiConfig.js中，替换BASE_URL
+找到后端的主机IP地址，将http://（Ip address) 复制到apiConfig.js中，替换BASE_URL并保存 Ctrl+S。
 
 文件地址：apivisual\src\apiConfig.js
 ```sh
 // apiConfig.js 示例
-const BASE_URL = 'http://10.198.67.90:5000'; // 替换为你的实际 IP 地址
+const BASE_URL = 'http://10.198.67.90:5000'; # 替换为你的实际 IP 地址,如上打开服务器即可看到
 ```
 启动前端界面
 ```sh
@@ -71,10 +71,10 @@ npm start
 
     请确保你已经按照上述步骤正确安装了所有依赖项。如果问题依然存在，请尝试删除 node_modules 文件夹和 package-lock.json 文件，然后重新运行 npm install：
 
-```sh
-rm -rf node_modules package-lock.json
-npm install
-```
+    ```sh
+    rm -rf node_modules package-lock.json
+    npm install
+    ```
 2. **我如何停止运行的服务器？**
 
     对于后端服务器，在运行 python app.py 的终端窗口中按 Ctrl + C。
