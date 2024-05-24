@@ -15,7 +15,7 @@
 
 打开CMD或者Bash，进入目录：
 ```sh
-cd C:\Users\User.name\Desktop\APIvisual #替换成实际文件夹目录
+cd C:\Users\User.name\Desktop\APIvisual-master #替换成实际文件夹目录
 ```
 
 ## 安装依赖项：
