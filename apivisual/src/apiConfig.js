@@ -1,7 +1,7 @@
 // Desc: API Configuration file
 // Base API URL
 // const BASE_URL = 'http://10.198.67.90:5000';
-const BASE_URL = 'https://c73e-79-174-223-90.ngrok-free.app';
+const BASE_URL = 'https://278e-77-133-249-229.ngrok-free.app';
 // API Endpoints
 export const API_ENDPOINTS = {
     users: `${BASE_URL}/users`,
