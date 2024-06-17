@@ -1,7 +1,7 @@
 // Desc: API Configuration file
 // Base API URL
 // const BASE_URL = 'http://10.198.67.90:5000';
-const BASE_URL = 'http://ts.hikalarm-api.site';
+const BASE_URL = 'https://ts.hikalarm-api.site';
 // API Endpoints
 export const API_ENDPOINTS = {
     users: `${BASE_URL}/users`,
