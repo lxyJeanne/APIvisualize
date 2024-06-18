@@ -18,7 +18,7 @@ const Message = () => {
     useEffect(() => {
         const interval = setInterval(() => {
             fetchAlarms();
-        }, 10000); // 每5秒请求一次
+        }, 15000); //间隔时间请求
         return () => clearInterval(interval);
     }, [fetchAlarms]);
 
