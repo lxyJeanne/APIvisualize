@@ -259,18 +259,14 @@ const AccountPage = () => {
                     key="action"
                     render={(_, record) => (
                         <>
-                      {record.picture_url ? (
-                          <a href={record.picture_url} target="_blank" rel="noopener noreferrer">
-                              URL
-                          </a>
-                      ) : (
-                          <a href={API_ENDPOINTS.alarms} target="_blank" rel="noopener noreferrer">
-                              View
-                          </a>
-                                )}
-                            </>
-                        )}
-                    />
+                            {record.picture_url && (
+                                <a href={record.picture_url} target="_blank" rel="noopener noreferrer">
+                                    URL
+                                </a>
+                            )}
+                        </>
+                    )}
+                />
                 </Table>
             </Card>
         </>
