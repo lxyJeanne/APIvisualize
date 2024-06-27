@@ -1,6 +1,9 @@
 # AX PRO application de visualisation des informations sur les alarmes guide de l'utilisateur
 
 Ceci est une application full-stack comprenant un front-end en React et un back-end en Flask. Cet article vous guidera pour exécuter ce projet localement.
+Version WEB:
+https://ap-ivisualize.vercel.app/
+##Ne pas diffuser au personnel extérieur à l'entreprise
 
 ## Prérequis
 
