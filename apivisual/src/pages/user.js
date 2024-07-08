@@ -80,7 +80,6 @@ const User = () => {
         const searchValue = values.globalSearch.toLowerCase();
         const filteredResults = users.filter(user =>
             user.username.toLowerCase().includes(searchValue) ||
-            user.password.toLowerCase().includes(searchValue) ||
             user.id.toString().includes(searchValue)
         );
         setSearchResults(filteredResults);
@@ -210,7 +209,6 @@ const User = () => {
                     <Table dataSource={searchResults}  pagination={{ pageSize: 5 }}>
                         <Column title="id" dataIndex="id" key="id" />
                         <Column title="Hpp Account" dataIndex="username" key="username" />
-                        <Column title="Password" dataIndex="password" key="password" />
                         <Column title="Enable Log" dataIndex="enable_log" key="enable_log" />
                         <Column title="Start Log Time" dataIndex="start_time" key="start_time" 
                                 sorter={(a, b) => a.start_time - b.start_time}
